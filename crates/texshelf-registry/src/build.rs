@@ -31,6 +31,9 @@ pub struct Args {
     /// Public URL the output directory is served from
     #[arg(long, default_value = "https://tex.jjsm.science/v1")]
     base_url: String,
+    /// Serve archives through a download counter at this URL instead of straight from --base-url
+    #[arg(long)]
+    download_url: Option<String>,
     /// Output of an earlier build; unchanged versions are copied from it
     #[arg(long)]
     previous: Option<PathBuf>,
@@ -52,6 +55,8 @@ pub struct Args {
 struct Meta {
     manifest_sha256: String,
     base_url: String,
+    #[serde(default)]
+    download_url: Option<String>,
     entry: VersionEntry,
 }
 
@@ -429,12 +434,16 @@ fn build_version(
         t.name,
         t.version
     );
+    let archives = match &args.download_url {
+        Some(url) => format!("{}/{}/{}", url.trim_end_matches('/'), t.name, t.version),
+        None => base.clone(),
+    };
     let stem = format!("{}-{}", t.name, t.version);
     let write = |ext: &str, bytes: &[u8]| -> Result<Artifact> {
         let file = format!("{stem}.{ext}");
         fs::write(dest.join(&file), bytes)?;
         Ok(Artifact {
-            url: format!("{base}/{file}"),
+            url: format!("{archives}/{file}"),
             sha256: sha256_hex(bytes),
             size: bytes.len() as u64,
         })
@@ -505,6 +514,7 @@ pub fn run(args: Args) -> Result<()> {
         let unchanged = old.as_ref().is_some_and(|o| {
             o.manifest_sha256 == loaded.sha256
                 && o.base_url == args.base_url
+                && o.download_url == args.download_url
                 && (args.no_preview || o.entry.preview.is_some())
         });
         if let (true, Some(old), Some(previous)) = (unchanged, &old, &args.previous) {
@@ -528,6 +538,7 @@ pub fn run(args: Args) -> Result<()> {
                 let meta = Meta {
                     manifest_sha256: loaded.sha256.clone(),
                     base_url: args.base_url.clone(),
+                    download_url: args.download_url.clone(),
                     entry: entry.clone(),
                 };
                 fs::write(dest.join("meta.json"), serde_json::to_vec_pretty(&meta)?)?;

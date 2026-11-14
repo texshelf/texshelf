@@ -19,6 +19,9 @@ pub struct Args {
     /// An earlier stats.json whose numbers are kept when a lookup fails
     #[arg(long)]
     previous: Option<PathBuf>,
+    /// URL that returns download totals as a JSON object of template name to count
+    #[arg(long)]
+    downloads_url: Option<String>,
 }
 
 fn github_slug(url: &str) -> Option<String> {
@@ -45,6 +48,15 @@ fn stars(slug: &str, token: Option<&str>) -> Result<u64> {
         .context("the response has no stargazers_count")
 }
 
+fn downloads(url: &str) -> Result<BTreeMap<String, u64>> {
+    let body = ureq::get(url)
+        .timeout(Duration::from_secs(20))
+        .set("User-Agent", "texshelf-registry")
+        .call()?
+        .into_string()?;
+    Ok(serde_json::from_str(&body)?)
+}
+
 pub fn run(args: Args) -> Result<()> {
     let index: Index = serde_json::from_slice(&fs::read(&args.index)?)?;
     let previous: Stats = args
@@ -53,6 +65,14 @@ pub fn run(args: Args) -> Result<()> {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     let token = std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty());
+    let counted = match args.downloads_url.as_deref().map(downloads) {
+        Some(Ok(map)) => map,
+        Some(Err(err)) => {
+            eprintln!("warning: no download counts: {err:#}");
+            BTreeMap::new()
+        }
+        None => BTreeMap::new(),
+    };
 
     let mut by_repo: BTreeMap<String, Option<u64>> = BTreeMap::new();
     let mut stats = Stats {
@@ -84,7 +104,7 @@ pub fn run(args: Args) -> Result<()> {
             entry.name.clone(),
             Stat {
                 stars: fresh.unwrap_or(old.stars),
-                downloads: old.downloads,
+                downloads: counted.get(&entry.name).copied().unwrap_or(old.downloads),
             },
         );
     }

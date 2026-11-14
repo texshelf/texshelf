@@ -1,0 +1,11 @@
+{
+  "projects": [
+    {
+      "name": "texshelf",
+      "src": "docs",
+      "prefix": "latex/texshelf",
+      "tags": "latex,typst,cli",
+      "notebooks": false
+    }
+  ]
+}
