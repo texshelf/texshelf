@@ -1,0 +1,23 @@
+[package]
+name = "texshelf-core"
+description = "Manifest, index and download logic shared by the texshelf tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+semver.workspace = true
+sha2.workspace = true
+hex.workspace = true
+tar.workspace = true
+flate2.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

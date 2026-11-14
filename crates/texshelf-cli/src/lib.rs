@@ -1,0 +1,175 @@
+mod commands;
+mod doctor;
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use texshelf_core::index::Sort;
+use texshelf_core::manifest::Engine;
+
+#[derive(Parser)]
+#[command(version, about = "Start LaTeX and Typst projects from templates")]
+struct Cli {
+    /// Which templates to show; defaults to the engine this command is named for
+    #[arg(long, global = true, value_enum)]
+    engine: Option<EngineArg>,
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum EngineArg {
+    Latex,
+    Typst,
+    All,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum SortArg {
+    Relevance,
+    Downloads,
+    Stars,
+    Newest,
+    Name,
+    Official,
+}
+
+impl From<SortArg> for Sort {
+    fn from(s: SortArg) -> Self {
+        match s {
+            SortArg::Relevance => Sort::Relevance,
+            SortArg::Downloads => Sort::Downloads,
+            SortArg::Stars => Sort::Stars,
+            SortArg::Newest => Sort::Newest,
+            SortArg::Name => Sort::Name,
+            SortArg::Official => Sort::Official,
+        }
+    }
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Create a project from a template
+    Init {
+        /// Template name, optionally with a version: article or article@1.2.0
+        template: String,
+        /// Folder to create; defaults to the template name
+        dir: Option<PathBuf>,
+        /// Set a template variable: --var title="My report"
+        #[arg(long = "var", value_name = "KEY=VALUE")]
+        vars: Vec<String>,
+        /// Use defaults for variables without asking
+        #[arg(short, long)]
+        yes: bool,
+        /// Do not run `git init` in the new folder
+        #[arg(long)]
+        no_git: bool,
+        /// Write into a folder that already has files
+        #[arg(long)]
+        force: bool,
+    },
+    /// Search the template index
+    Search {
+        query: Vec<String>,
+        #[arg(long, value_enum)]
+        sort: Option<SortArg>,
+        #[arg(long)]
+        category: Option<String>,
+        #[arg(long)]
+        license: Option<String>,
+        /// Only templates maintained by the texshelf project
+        #[arg(long)]
+        official: bool,
+        #[arg(long, default_value_t = 30)]
+        limit: usize,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show a template's details
+    Info {
+        template: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Open the prebuilt PDF preview of a template
+    View {
+        template: String,
+        /// Open the template's web page instead of the PDF
+        #[arg(long)]
+        web: bool,
+    },
+    /// Open a template in Overleaf or the Typst web app
+    Open {
+        template: String,
+        /// Print the link instead of opening a browser
+        #[arg(long)]
+        print: bool,
+    },
+    /// Refresh the local copy of the template index
+    Update,
+    /// Check the TeX and Typst tools on this machine, and a document's packages
+    Doctor {
+        /// A .tex file whose packages should be checked
+        file: Option<PathBuf>,
+    },
+    /// Check a registry manifest before submitting it
+    Validate { manifest: PathBuf },
+    /// Print a shell completion script
+    Completions { shell: clap_complete::Shell },
+}
+
+pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
+    let cli = Cli::parse();
+    let engine = match cli.engine {
+        None => Some(default_engine),
+        Some(EngineArg::Latex) => Some(Engine::Latex),
+        Some(EngineArg::Typst) => Some(Engine::Typst),
+        Some(EngineArg::All) => None,
+    };
+    let result = match cli.command {
+        Command::Init {
+            template,
+            dir,
+            vars,
+            yes,
+            no_git,
+            force,
+        } => commands::init(&template, dir, &vars, yes, no_git, force),
+        Command::Search {
+            query,
+            sort,
+            category,
+            license,
+            official,
+            limit,
+            json,
+        } => commands::search(
+            &query.join(" "),
+            engine,
+            sort.map(Sort::from),
+            category.as_deref(),
+            license.as_deref(),
+            official,
+            limit,
+            json,
+        ),
+        Command::Info { template, json } => commands::info(bin, &template, json),
+        Command::View { template, web } => commands::view(&template, web),
+        Command::Open { template, print } => commands::open(&template, print),
+        Command::Update => commands::update(),
+        Command::Doctor { file } => doctor::run(file),
+        Command::Validate { manifest } => commands::validate(&manifest),
+        Command::Completions { shell } => {
+            clap_complete::generate(shell, &mut Cli::command(), bin, &mut std::io::stdout());
+            Ok(())
+        }
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("error: {err:#}");
+            ExitCode::FAILURE
+        }
+    }
+}

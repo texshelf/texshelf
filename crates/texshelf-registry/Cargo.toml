@@ -1,0 +1,24 @@
+[package]
+name = "texshelf-registry"
+description = "Builds the texshelf index and template archives from registry manifests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+texshelf-core = { path = "../texshelf-core" }
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true
+tar.workspace = true
+flate2.workspace = true
+ureq.workspace = true
+globset = "0.4"
+walkdir = "2"
+tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
