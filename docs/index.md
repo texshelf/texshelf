@@ -9,8 +9,23 @@ and `typshelf` lists Typst ones. They are otherwise the same program.
 
 ## Install
 
-You need [Rust](https://rustup.rs) 1.82 or newer. Prebuilt downloads and a
-Homebrew formula will come with the first tagged release.
+```console
+brew install texshelf/tap/texshelf
+```
+
+Without Homebrew, on macOS and Linux:
+
+```console
+curl -fsSL https://tex.jjsm.science/install.sh | sh
+```
+
+On Windows, in PowerShell:
+
+```console
+irm https://tex.jjsm.science/install.ps1 | iex
+```
+
+Or build from source with [Rust](https://rustup.rs) 1.82 or newer:
 
 ```console
 cargo install --git https://github.com/texshelf/texshelf texshelf

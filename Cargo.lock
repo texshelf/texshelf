@@ -1026,6 +1026,7 @@ dependencies = [
  "tar",
  "tempfile",
  "texshelf-core",
+ "toml",
 ]
 
 [[package]]

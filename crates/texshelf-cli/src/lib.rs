@@ -1,3 +1,4 @@
+mod author;
 mod commands;
 mod doctor;
 
@@ -118,12 +119,34 @@ enum Command {
     },
     /// Check a registry manifest before submitting it
     Validate { manifest: PathBuf },
+    /// Start a template of your own: a folder with a starter document and texshelf.toml
+    NewTemplate {
+        /// Folder to create
+        dir: PathBuf,
+        /// Template name; defaults to the folder name
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long, default_value = "article")]
+        category: String,
+    },
+    /// Submit the template in this folder to the registry
+    Publish {
+        /// Folder holding texshelf.toml; defaults to the current one
+        dir: Option<PathBuf>,
+        /// Print the manifest and the link without opening a browser
+        #[arg(long)]
+        print: bool,
+    },
     /// Print a shell completion script
     Completions { shell: clap_complete::Shell },
 }
 
 pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
-    let cli = Cli::parse();
+    let matches = Cli::command().name(bin).bin_name(bin).get_matches();
+    let cli = match <Cli as clap::FromArgMatches>::from_arg_matches(&matches) {
+        Ok(cli) => cli,
+        Err(err) => err.exit(),
+    };
     let engine = match cli.engine {
         None => Some(default_engine),
         Some(EngineArg::Latex) => Some(Engine::Latex),
@@ -165,6 +188,12 @@ pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
         Command::Update => commands::update(),
         Command::Doctor { file } => doctor::run(file),
         Command::Validate { manifest } => commands::validate(&manifest),
+        Command::NewTemplate {
+            dir,
+            name,
+            category,
+        } => author::new_template(bin, &dir, engine.unwrap_or(default_engine), name, &category),
+        Command::Publish { dir, print } => author::publish(dir, print),
         Command::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), bin, &mut std::io::stdout());
             Ok(())

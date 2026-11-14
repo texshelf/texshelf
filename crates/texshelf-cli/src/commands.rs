@@ -25,7 +25,7 @@ fn store() -> Result<Store> {
     Ok(Store::new(url, cache_dir()?))
 }
 
-fn load() -> Result<(Index, Stats)> {
+pub(crate) fn load() -> Result<(Index, Stats)> {
     store()?.load()
 }
 
@@ -377,7 +377,7 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn launch(target: &str) {
+pub(crate) fn launch(target: &str) {
     println!("{target}");
     if let Err(err) = open::that(target) {
         eprintln!("could not open it automatically: {err}");

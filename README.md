@@ -18,12 +18,30 @@ and `typshelf` lists Typst ones. They are the same program otherwise, and either
 one can create a project from any template. Browse the templates with previews
 at [tex.jjsm.science](https://tex.jjsm.science).
 
-The project is new. The commands below work, but there are no prebuilt
-downloads or Homebrew formula yet.
-
 ## Install
 
-You need [Rust](https://rustup.rs) 1.82 or newer.
+macOS and Linux, with Homebrew:
+
+```console
+brew install texshelf/tap/texshelf
+```
+
+macOS and Linux, without Homebrew:
+
+```console
+curl -fsSL https://tex.jjsm.science/install.sh | sh
+```
+
+Windows, in PowerShell:
+
+```console
+irm https://tex.jjsm.science/install.ps1 | iex
+```
+
+The two scripts download the latest release from GitHub, check its SHA-256,
+and put `texshelf` and `typshelf` in `~/.local/bin` (on Windows,
+`%LOCALAPPDATA%\texshelf\bin`). With [Rust](https://rustup.rs) 1.82 or newer
+you can build from source instead:
 
 ```console
 cargo install --git https://github.com/texshelf/texshelf texshelf
@@ -40,6 +58,8 @@ cargo install --git https://github.com/texshelf/texshelf texshelf
 | `open <name>` | Open the template in Overleaf, or in the Typst web app when it is on Typst Universe |
 | `update` | Refresh the local copy of the index (also happens by itself once a day) |
 | `doctor [file.tex]` | List the TeX and Typst tools installed, and the packages a document uses that are missing |
+| `new-template <dir>` | Start a template of your own, with a starter document and `texshelf.toml` |
+| `publish` | Submit the template in the current folder to the registry |
 | `validate <manifest>` | Check a registry manifest before you submit it |
 | `completions <shell>` | Print a completion script for bash, zsh, fish or PowerShell |
 

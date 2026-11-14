@@ -15,17 +15,26 @@ a commit of yours.
 
 ## Steps
 
-1. Fork the registry and create `templates/<name>/<version>.toml`. Copying the
-   manifest of a similar template is the fastest way.
-2. Set `rev` to the full hash of the commit you want to publish
-   (`git rev-parse HEAD`).
-3. Check the file:
+1. Put a `texshelf.toml` next to your template's main file. `texshelf
+   new-template <dir>` creates one with a starter document, or copy the
+   `[template]`, `[latex]` or `[typst]`, and `[variables]` tables from the
+   manifest of a similar template. Leave `[source]` out.
+2. Commit and push the template to a public GitHub repository.
+3. In the template's folder, run:
 
    ```console
-   texshelf validate templates/<name>/<version>.toml
+   texshelf publish
    ```
 
-4. Open a pull request.
+   It reads the repository URL, the current commit and the folder path from
+   Git, checks the manifest, and opens GitHub with the registry file filled in.
+   Choose "Propose new file" and open the pull request. `texshelf.toml` itself
+   is left out of the published template. Add `--print` to see the manifest
+   and the link without opening a browser.
+
+To do it by hand instead, fork the registry, create
+`templates/<name>/<version>.toml` with a `[source]` table whose `rev` is the
+full commit hash, check it with `texshelf validate`, and open a pull request.
 
 CI first scans your files without running them. It looks for compiled
 programs, script files, shell commands such as `\write18`, packages that need

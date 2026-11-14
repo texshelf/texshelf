@@ -110,7 +110,7 @@ pub struct Manifest {
     pub typst: Option<Typst>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub variables: BTreeMap<String, Variable>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "RegistryMeta::is_unset")]
     pub registry: RegistryMeta,
 }
 
@@ -196,6 +196,12 @@ pub struct RegistryMeta {
     pub official: bool,
     #[serde(default)]
     pub verified: bool,
+}
+
+impl RegistryMeta {
+    fn is_unset(&self) -> bool {
+        !self.official && !self.verified
+    }
 }
 
 impl Manifest {

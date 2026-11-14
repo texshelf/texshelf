@@ -79,6 +79,25 @@ typst and git are installed. Given a `.tex` file (or with a `main.tex` in the
 current folder), it also looks up every `\usepackage` and `\documentclass` with
 `kpsewhich` and names the ones that are missing.
 
+## new-template
+
+```console
+texshelf new-template <dir> [--name <name>] [--category <c>]
+```
+
+Creates a folder with a starter document and a `texshelf.toml` to fill in.
+`typshelf new-template` starts a Typst template.
+
+## publish
+
+```console
+texshelf publish [dir] [--print]
+```
+
+Run it in a template folder that is committed and pushed to GitHub. It builds
+the registry manifest from `texshelf.toml` and the Git state, validates it, and
+opens a GitHub page with the file ready to propose as a pull request.
+
 ## validate
 
 `validate <manifest.toml>` checks a registry manifest and lists every problem

@@ -214,3 +214,78 @@ fn open_prints_an_overleaf_link_with_the_compiler() {
     );
     assert!(link.trim_end().ends_with("&engine=xelatex"), "{link}");
 }
+
+fn git(dir: &Path, args: &[&str]) {
+    let ok = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+        ])
+        .args(args)
+        .output()
+        .unwrap()
+        .status
+        .success();
+    assert!(ok, "git {args:?}");
+}
+
+#[test]
+fn new_template_then_publish_builds_a_registry_manifest() {
+    let (home, work) = setup();
+    let repo = work.path().join("repo");
+    fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(
+        &repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "git@github.com:someone/templates.git",
+        ],
+    );
+
+    let made = run(
+        TEXSHELF,
+        home.path(),
+        &repo,
+        &["new-template", "lab-report", "--category", "lab-report"],
+    );
+    assert!(made.status.success(), "{}", text(&made.stderr));
+    let dir = repo.join("lab-report");
+    assert!(dir.join("main.tex").exists() && dir.join("texshelf.toml").exists());
+
+    let dirty = run(TEXSHELF, home.path(), &dir, &["publish", "--print"]);
+    assert!(
+        text(&dirty.stderr).contains("uncommitted changes"),
+        "{}",
+        text(&dirty.stderr)
+    );
+
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-q", "-m", "Add template"]);
+    let unpushed = run(TEXSHELF, home.path(), &dir, &["publish", "--print"]);
+    assert!(
+        text(&unpushed.stderr).contains("git push"),
+        "{}",
+        text(&unpushed.stderr)
+    );
+
+    git(&repo, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    let out = run(TEXSHELF, home.path(), &dir, &["publish", "--print"]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let printed = text(&out.stdout);
+    assert!(
+        printed.starts_with("templates/lab-report/0.1.0.toml"),
+        "{printed}"
+    );
+    assert!(printed.contains("repo = \"https://github.com/someone/templates\""));
+    assert!(printed.contains("path = \"lab-report\""));
+    assert!(printed.contains("exclude = [\"texshelf.toml\"]"));
+    assert!(!printed.contains("[registry]"));
+    assert!(printed.contains("https://github.com/texshelf/registry/new/main?filename=templates%2Flab-report%2F0.1.0.toml&value=schema"));
+}
