@@ -81,6 +81,9 @@ enum Command {
         /// Only templates maintained by the texshelf project
         #[arg(long)]
         official: bool,
+        /// Only templates made for these universities, e.g. --university "UC Chile" Cambridge
+        #[arg(long, num_args = 1.., value_name = "NAME")]
+        university: Vec<String>,
         #[arg(long, default_value_t = 30)]
         limit: usize,
         #[arg(long)]
@@ -142,6 +145,7 @@ pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
             category,
             license,
             official,
+            university,
             limit,
             json,
         } => commands::search(
@@ -151,6 +155,7 @@ pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
             category.as_deref(),
             license.as_deref(),
             official,
+            &university,
             limit,
             json,
         ),

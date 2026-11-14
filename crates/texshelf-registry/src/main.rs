@@ -1,3 +1,4 @@
+mod audit;
 mod build;
 mod stats;
 mod util;
@@ -23,6 +24,8 @@ enum Command {
     },
     /// Fetch sources, pack archives, render previews and write index.json
     Build(build::Args),
+    /// Scan template sources for risky content without building them
+    Audit(audit::Args),
     /// Write stats.json with GitHub star counts for each template's repository
     Stats(stats::Args),
 }
@@ -35,6 +38,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Build(args) => build::run(args),
+        Command::Audit(args) => audit::run(args),
         Command::Stats(args) => stats::run(args),
     }
 }

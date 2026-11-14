@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use texshelf_core::fetch::sha256_hex;
 use texshelf_core::index::{Artifact, Entry, Index, VersionEntry};
 use texshelf_core::manifest::{Compiler, Engine, Manifest, SCHEMA};
+
+use crate::audit;
 use walkdir::WalkDir;
 
 use crate::util;
@@ -46,6 +48,9 @@ pub struct Args {
     /// Fail when a preview does not compile
     #[arg(long)]
     strict: bool,
+    /// Fail when the audit finds a high-severity problem
+    #[arg(long)]
+    fail_on_audit: bool,
     /// Build only these templates
     #[arg(long)]
     only: Vec<String>,
@@ -143,7 +148,7 @@ fn git(dir: &Path, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-fn checkout(
+pub fn checkout(
     repo: &str,
     rev: &str,
     maps: &BTreeMap<String, PathBuf>,
@@ -173,7 +178,7 @@ fn globs(patterns: &[String]) -> Result<GlobSet> {
 }
 
 /// Lists the template's files as (relative path, absolute path), sorted.
-fn stage(root: &Path, exclude: &[String]) -> Result<Vec<(String, PathBuf)>> {
+pub fn stage(root: &Path, exclude: &[String]) -> Result<Vec<(String, PathBuf)>> {
     if !root.is_dir() {
         bail!("source.path does not exist in the repository");
     }
@@ -373,6 +378,24 @@ fn preview(manifest: &Manifest, files: &[(String, PathBuf)]) -> Result<(Vec<u8>,
     Ok((bytes, png))
 }
 
+fn compiler_version(manifest: &Manifest) -> Option<String> {
+    let program = match manifest.template.engine {
+        Engine::Typst => "typst".to_string(),
+        Engine::Latex => manifest
+            .latex
+            .clone()
+            .unwrap_or_default()
+            .compiler
+            .to_string(),
+    };
+    let out = Command::new(program).arg("--version").output().ok()?;
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .map(str::to_string)
+}
+
 fn copy_dir(from: &Path, to: &Path) -> Result<()> {
     fs::create_dir_all(to)?;
     for item in fs::read_dir(from)? {
@@ -451,6 +474,7 @@ fn build_version(
     let tarball = write("tar.gz", &tar_gz(&files)?)?;
     let zip = write("zip", &zip_archive(&files)?)?;
 
+    let mut built_with = None;
     let mut preview_url = None;
     let mut thumbnail_url = None;
     if !args.no_preview {
@@ -458,6 +482,7 @@ fn build_version(
             Ok((pdf, png)) => {
                 fs::write(dest.join("preview.pdf"), pdf)?;
                 preview_url = Some(format!("{base}/preview.pdf"));
+                built_with = compiler_version(m);
                 if let Some(png) = png {
                     fs::write(dest.join("thumb.png"), png)?;
                     thumbnail_url = Some(format!("{base}/thumb.png"));
@@ -467,6 +492,17 @@ fn build_version(
             Err(err) => eprintln!("  warning: {err:#}"),
         }
     }
+
+    let report = audit::scan(&files, m)?;
+    fs::write(dest.join("audit.txt"), &report.log)?;
+    if args.fail_on_audit && report.audit.status == "failed" {
+        bail!(
+            "the audit found a high-severity problem:\n{}",
+            audit::summary(&report.audit)
+        );
+    }
+    let mut checked = report.audit;
+    checked.log = Some(format!("{base}/audit.txt"));
 
     let latex = (t.engine == Engine::Latex).then(|| m.latex.clone().unwrap_or_default());
     Ok(VersionEntry {
@@ -482,6 +518,13 @@ fn build_version(
         preview: preview_url,
         thumbnail: thumbnail_url,
         files: names,
+        typst: m
+            .typst
+            .as_ref()
+            .and_then(|t| t.compiler.as_ref())
+            .map(ToString::to_string),
+        built_with,
+        audit: Some(checked),
     })
 }
 
@@ -516,6 +559,10 @@ pub fn run(args: Args) -> Result<()> {
                 && o.base_url == args.base_url
                 && o.download_url == args.download_url
                 && (args.no_preview || o.entry.preview.is_some())
+                && o.entry
+                    .audit
+                    .as_ref()
+                    .is_some_and(|a| a.rules == audit::RULES)
         });
         if let (true, Some(old), Some(previous)) = (unchanged, &old, &args.previous) {
             if previous.join(&sub) != dest {
@@ -577,6 +624,7 @@ pub fn run(args: Args) -> Result<()> {
                 .or_else(|| Some(newest.manifest.source.repo.clone())),
             keywords: t.keywords.clone(),
             categories: t.categories.clone(),
+            universities: t.universities.clone(),
             official: newest.manifest.registry.official,
             verified: newest.manifest.registry.verified,
             universe: t.universe.clone(),

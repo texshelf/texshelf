@@ -179,6 +179,15 @@ fn clip(text: &str, max: usize) -> String {
     format!("{}…", cut.trim_end())
 }
 
+/// What compiles the template: pdflatex, xelatex, lualatex or typst.
+fn built_with(entry: &Entry) -> String {
+    entry
+        .version(None)
+        .ok()
+        .and_then(|v| v.compiler.clone())
+        .unwrap_or_else(|| entry.engine.to_string())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn search(
     text: &str,
@@ -187,6 +196,7 @@ pub fn search(
     category: Option<&str>,
     license: Option<&str>,
     official_only: bool,
+    universities: &[String],
     limit: usize,
     json: bool,
 ) -> Result<()> {
@@ -202,6 +212,7 @@ pub fn search(
         category,
         license,
         official_only,
+        universities,
     };
     let sort = sort.unwrap_or(if text.trim().is_empty() {
         Sort::Official
@@ -220,6 +231,7 @@ pub fn search(
                     "name": e.name, "engine": e.engine, "title": e.title,
                     "description": e.description, "license": e.license,
                     "categories": e.categories, "official": e.official,
+                    "universities": e.universities, "compiler": built_with(e),
                     "latest": e.latest.to_string(), "updated": e.updated,
                     "stars": stat(e).stars, "downloads": stat(e).downloads,
                 })
@@ -238,7 +250,7 @@ pub fn search(
         .map(|e| {
             [
                 e.name.clone(),
-                e.engine.to_string(),
+                built_with(e),
                 e.categories.join(","),
                 stat(e).stars.to_string(),
                 e.license.clone(),
@@ -310,11 +322,15 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
     row("Title", &entry.title);
     row(
         "Engine",
-        &match &version.compiler {
-            Some(c) => format!("{} ({c})", entry.engine),
-            None => entry.engine.to_string(),
+        &match (&version.compiler, &version.typst) {
+            (Some(c), _) => format!("{} ({c})", entry.engine),
+            (None, Some(v)) => format!("{} ({v} or newer)", entry.engine),
+            (None, None) => entry.engine.to_string(),
         },
     );
+    if !entry.universities.is_empty() {
+        row("University", &entry.universities.join(", "));
+    }
     row("License", &entry.license);
     row("Authors", &entry.authors.join(", "));
     row("Categories", &entry.categories.join(", "));
@@ -338,6 +354,18 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
         ),
     );
     row("Entrypoint", &version.entrypoint);
+    if let Some(audit) = &version.audit {
+        let day = audit.at.split('T').next().unwrap_or(&audit.at);
+        let result = match audit.findings.len() {
+            0 => "passed".to_string(),
+            n => format!(
+                "{} ({n} finding{})",
+                audit.status,
+                if n == 1 { "" } else { "s" }
+            ),
+        };
+        row("Audit", &format!("{result}, checked {day}"));
+    }
     if !version.variables.is_empty() {
         println!("\nVariables");
         for (key, var) in &version.variables {

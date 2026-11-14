@@ -49,6 +49,7 @@ files = ["template.tex"]
 | `entrypoint` | yes | The file to compile, relative to the template folder |
 | `keywords` | no | Extra search terms |
 | `repository` | no | Project page, when it differs from `source.repo` |
+| `universities` | no | Up to five universities or institutions the template is made for, such as `["UC Chile"]`. Use the name people search for, and spell it the way other templates for the same place do. |
 | `universe` | no | Typst only: the template's name on Typst Universe, which enables the Typst web app link |
 
 ## [source]
@@ -73,6 +74,14 @@ Only for `engine = "latex"`.
 | `compiler` | `pdflatex` | `pdflatex`, `xelatex`, `lualatex` |
 | `bib` | `none` | `none`, `bibtex`, `biber` |
 | `shell_escape` | `false` | `true` if the document needs `-shell-escape`. The CLI and website warn users about it. |
+
+## [typst]
+
+Only for `engine = "typst"`.
+
+| Key | Default | Values |
+| --- | --- | --- |
+| `compiler` | none | The oldest Typst version the template works with, such as `"0.12.0"`. Shown as "Typst 0.12.0 or newer". |
 
 ## [variables.<key>]
 

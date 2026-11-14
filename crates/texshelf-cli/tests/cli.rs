@@ -34,6 +34,7 @@ fn registry(dir: &Path, sha256: &str) {
             "name": "plain-article", "engine": "latex", "title": "Plain article",
             "description": "A short article with one section.", "authors": ["Someone"],
             "license": "MIT", "categories": ["article"], "official": true,
+            "universities": ["UC Chile"],
             "latest": "1.0.0", "updated": "2026-11-14",
             "versions": [{
                 "version": "1.0.0", "published": "2026-11-14", "entrypoint": "main.tex",
@@ -182,6 +183,19 @@ fn each_command_defaults_to_its_own_engine() {
     );
     let rows: serde_json::Value = serde_json::from_str(&all).unwrap();
     assert_eq!(rows.as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn search_filters_by_university_and_shows_the_compiler() {
+    let (home, work) = setup();
+    let search = |args: &[&str]| text(&run(TEXSHELF, home.path(), work.path(), args).stdout);
+    let hit = search(&["search", "--university", "Cambridge", "uc chile"]);
+    assert!(
+        hit.contains("plain-article") && hit.contains("xelatex"),
+        "{hit}"
+    );
+    let miss = search(&["search", "--university", "Cambridge"]);
+    assert!(miss.contains("No templates match"), "{miss}");
 }
 
 #[test]

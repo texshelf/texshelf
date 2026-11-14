@@ -20,5 +20,6 @@ flate2.workspace = true
 ureq.workspace = true
 globset = "0.4"
 walkdir = "2"
+regex = "1"
 tempfile = "3"
 zip = { version = "2", default-features = false, features = ["deflate"] }

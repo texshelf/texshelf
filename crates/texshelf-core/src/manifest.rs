@@ -106,6 +106,8 @@ pub struct Manifest {
     pub source: Source,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latex: Option<Latex>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typst: Option<Typst>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub variables: BTreeMap<String, Variable>,
     #[serde(default)]
@@ -128,6 +130,9 @@ pub struct Template {
     pub keywords: Vec<String>,
     pub categories: Vec<String>,
     pub entrypoint: String,
+    /// Universities or institutions this template is made for, such as "UC Chile".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub universities: Vec<String>,
     /// Name of the same template on Typst Universe, if it is published there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub universe: Option<String>,
@@ -157,6 +162,14 @@ pub struct Latex {
     pub bib: Bib,
     #[serde(default)]
     pub shell_escape: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Typst {
+    /// Oldest Typst compiler version the template works with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compiler: Option<Version>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -212,6 +225,17 @@ impl Manifest {
         }
         if t.authors.is_empty() {
             errors.push("authors is empty".into());
+        }
+        if t.universities.len() > 5 {
+            errors.push("universities lists more than 5 names".into());
+        }
+        for u in &t.universities {
+            if !(2..=60).contains(&u.trim().chars().count()) {
+                errors.push(format!("university `{u}` must be 2-60 characters"));
+            }
+        }
+        if t.engine == Engine::Latex && self.typst.is_some() {
+            errors.push("[typst] is only allowed when engine = \"typst\"".into());
         }
         if !LICENSES.contains(&t.license.as_str()) {
             errors.push(format!(

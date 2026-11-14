@@ -27,7 +27,15 @@ a commit of yours.
 
 4. Open a pull request.
 
-CI fetches your commit and compiles it in a full TeX Live or Typst container.
+CI first scans your files without running them. It looks for compiled
+programs, script files, shell commands such as `\write18`, packages that need
+shell-escape, paths that leave the template folder, and private keys or
+tokens. A compiled program, an absolute path, a leaked key or a shell command
+that downloads code fails the check. Script files, a `latexmkrc` and plain
+shell-escape use are allowed, and are listed on the template's page so users
+can see them. You can run the same scan yourself with `texshelf-registry audit`.
+
+CI then fetches your commit and compiles it in a full TeX Live or Typst container.
 The rendered PDF and thumbnail are attached to the pull request run as an
 artifact so reviewers can look at them. After the merge, the template is on the
 website and in the CLI within a few minutes.

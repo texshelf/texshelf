@@ -42,12 +42,13 @@ Without words it lists everything, official templates first.
 | `--category <c>` | One of: article, journal, thesis, report, lab-report, homework, exam, presentation, poster, cv, letter, book, notes, cheatsheet, other |
 | `--license <id>` | An SPDX identifier such as `MIT` |
 | `--official` | Only templates maintained by the texshelf project |
+| `--university <name>...` | Only templates made for one of these universities, for example `--university "UC Chile" Cambridge MIT`. A name matches if it is part of the university's listed name, ignoring case. Put search words before this option, because every word after it is read as a university. |
 | `--engine latex\|typst\|all` | Which engine to list |
 | `--limit <n>` | Rows to print, 30 by default |
 | `--json` | Print a JSON array instead of a table |
 
-Download counts are not collected yet, so `--sort downloads` currently leaves
-the order alphabetical.
+The ENGINE column shows what compiles each template: `pdflatex`, `xelatex`,
+`lualatex` or `typst`. Download counts are refreshed once a day.
 
 ## info, view, open
 

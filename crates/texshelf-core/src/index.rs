@@ -33,6 +33,8 @@ pub struct Entry {
     pub keywords: Vec<String>,
     pub categories: Vec<String>,
     #[serde(default)]
+    pub universities: Vec<String>,
+    #[serde(default)]
     pub official: bool,
     #[serde(default)]
     pub verified: bool,
@@ -63,6 +65,39 @@ pub struct VersionEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail: Option<String>,
     pub files: Vec<String>,
+    /// Oldest Typst compiler version the template works with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typst: Option<String>,
+    /// Version line of the compiler that built the preview, e.g. "typst 0.14.2".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub built_with: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit: Option<Audit>,
+}
+
+/// Result of the static checks the registry runs on a template's files.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Audit {
+    pub at: String,
+    pub rules: u32,
+    /// "passed", "warnings" or "failed"
+    pub status: String,
+    pub scanned: usize,
+    #[serde(default)]
+    pub findings: Vec<Finding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Finding {
+    /// "high" or "warn"
+    pub severity: String,
+    pub rule: String,
+    pub file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<u32>,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,6 +197,8 @@ pub struct Query<'a> {
     pub category: Option<&'a str>,
     pub license: Option<&'a str>,
     pub official_only: bool,
+    /// Keep templates made for any of these universities. Matches part of a name, ignoring case.
+    pub universities: &'a [String],
 }
 
 fn score(entry: &Entry, words: &[String]) -> u32 {
@@ -200,6 +237,17 @@ fn score(entry: &Entry, words: &[String]) -> u32 {
     total
 }
 
+fn made_for(entry: &Entry, wanted: &[String]) -> bool {
+    wanted.iter().any(|w| {
+        let w = w.trim().to_lowercase();
+        !w.is_empty()
+            && entry
+                .universities
+                .iter()
+                .any(|u| u.to_lowercase().contains(&w))
+    })
+}
+
 /// Filters and orders the index. Every word of the query has to match somewhere.
 pub fn search<'a>(index: &'a Index, stats: &Stats, query: &Query, sort: Sort) -> Vec<&'a Entry> {
     let words: Vec<String> = query
@@ -222,6 +270,7 @@ pub fn search<'a>(index: &'a Index, stats: &Stats, query: &Query, sort: Sort) ->
                 .is_none_or(|l| t.license.eq_ignore_ascii_case(l))
         })
         .filter(|t| !query.official_only || t.official)
+        .filter(|t| query.universities.is_empty() || made_for(t, query.universities))
         .filter_map(|t| {
             if words.is_empty() {
                 return Some((0, t));
@@ -352,6 +401,7 @@ mod tests {
             repository: None,
             keywords: vec![],
             categories: cats.iter().map(|c| c.to_string()).collect(),
+            universities: vec![],
             official,
             verified: false,
             universe: None,
@@ -447,6 +497,31 @@ mod tests {
             ..Default::default()
         };
         assert!(search(&index, &stats, &none, Sort::Relevance).is_empty());
+    }
+
+    #[test]
+    fn filters_by_university() {
+        let (mut index, stats) = sample();
+        index.templates[0].universities = vec!["UC Chile".into()];
+        index.templates[1].universities = vec!["University of Cambridge".into(), "MIT".into()];
+        let wanted = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let find = |list: &[String]| {
+            let q = Query {
+                universities: list,
+                ..Default::default()
+            };
+            search(&index, &stats, &q, Sort::Name)
+                .into_iter()
+                .map(|e| e.name.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(find(&wanted(&["uc chile"])), ["article"]);
+        assert_eq!(find(&wanted(&["cambridge"])), ["arxiv-style"]);
+        assert_eq!(
+            find(&wanted(&["UC Chile", "MIT"])),
+            ["article", "arxiv-style"]
+        );
+        assert!(find(&wanted(&["Oxford"])).is_empty());
     }
 
     #[test]
