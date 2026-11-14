@@ -1,0 +1,50 @@
+name: Bug in the CLI
+description: texshelf or typshelf did something wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and output
+      description: Paste the command you ran and everything it printed.
+      render: console
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `texshelf --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed with
+      options:
+        - Homebrew
+        - install.sh
+        - install.ps1
+        - cargo
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: macOS 26 on Apple Silicon
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of texshelf doctor
+      description: Only needed when the problem involves compiling or missing packages.
+      render: console

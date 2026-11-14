@@ -1,5 +1,10 @@
 <img src="https://raw.githubusercontent.com/texshelf/brand/main/logo/lockup.svg" alt="texshelf" width="240">
 
+[![Release](https://img.shields.io/github/v/release/texshelf/texshelf)](https://github.com/texshelf/texshelf/releases/latest)
+[![crates.io](https://img.shields.io/crates/v/texshelf)](https://crates.io/crates/texshelf)
+[![CI](https://github.com/texshelf/texshelf/actions/workflows/ci.yml/badge.svg)](https://github.com/texshelf/texshelf/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/texshelf/texshelf)](https://github.com/texshelf/texshelf/stargazers)
+
 Start a LaTeX or Typst project from a template, the way `uv init` or
 `cargo new` start a code project.
 
@@ -107,6 +112,20 @@ folder and point the CLI at it:
 cargo run --bin texshelf-registry -- build --registry ../registry --out /tmp/shelf/v1 --base-url /tmp/shelf/v1
 TEXSHELF_INDEX_URL=/tmp/shelf/v1/index.json cargo run --bin texshelf -- init article
 ```
+
+## Contributing
+
+The quickest contribution is a template. Run `texshelf publish` in its folder,
+or [request one](https://github.com/texshelf/registry/issues/new/choose) if it
+is not yours. Bug reports and pull requests for the CLI are welcome in this
+repository. The
+[contributing guide](https://github.com/texshelf/.github/blob/main/CONTRIBUTING.md)
+covers both, and everyone taking part follows the
+[code of conduct](https://github.com/texshelf/.github/blob/main/CODE_OF_CONDUCT.md).
+
+If texshelf saved you some setup time, a star helps. Homebrew accepts a
+project into its main repository, where `brew install texshelf` works without
+the tap prefix, once it has 225 of them.
 
 ## License
 

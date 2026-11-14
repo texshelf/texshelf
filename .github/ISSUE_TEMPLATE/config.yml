@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Request a template or report a broken one
+    url: https://github.com/texshelf/registry/issues/new/choose
+    about: Template issues live in the registry
+  - name: Documentation
+    url: https://docs.jjsm.science/latex/texshelf/
+    about: Commands, the manifest format and how to publish
+  - name: Report a security problem
+    url: https://github.com/texshelf/texshelf/security/advisories/new
+    about: Please report these privately

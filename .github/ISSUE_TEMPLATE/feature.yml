@@ -1,0 +1,23 @@
+name: Feature request
+description: A command, flag or behaviour you would like
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: Describe the situation first. The solution comes after.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could work
+      description: A sketch of the command line is enough.
+      render: console
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Would you work on it
+      options:
+        - label: I can open a pull request for this
