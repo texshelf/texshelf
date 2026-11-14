@@ -23,6 +23,17 @@ and `typshelf` lists Typst ones. They are the same program otherwise, and either
 one can create a project from any template. Browse the templates with previews
 at [tex.jjsm.science](https://tex.jjsm.science).
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=texshelf%2Ftexshelf&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=texshelf/texshelf&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=texshelf/texshelf&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=texshelf/texshelf&type=date&legend=top-left" />
+ </picture>
+</a>
+
+
 ## Install
 
 macOS and Linux, with Homebrew:
