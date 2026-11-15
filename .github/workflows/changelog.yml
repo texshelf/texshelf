@@ -1,0 +1,89 @@
+# Publishes CHANGELOG.md to https://docs.jjsm.science/latex/texshelf/changelog.
+# The rest of the docs live in texshelf/docs; this uses the sync script from there.
+# Org secrets: WIKI_PASSWORD, WIKI_2FA_SECRET, CF_API_TOKEN, CF_ZONE_ID.
+# Org variables: WIKI_USERNAME, WIKI_SITE_ID. Keep the vars fallbacks below.
+name: Publish changelog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+      - .github/workflows/changelog.yml
+  workflow_dispatch:
+
+concurrency:
+  group: changelog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      WIKI_URL: https://docs.jjsm.science
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: texshelf/docs
+          path: .docs-tools
+          sparse-checkout: .github/scripts
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Cloudflare's Bot Fight Mode challenges GitHub's runner IPs; only an IP
+      # Access "allow" rule gets past it, so allow this runner while the job runs.
+      - name: Allow this runner through Cloudflare
+        id: cf_allow
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID || vars.CF_ZONE_ID }}
+        run: |
+          ip=$(curl -fsS https://www.cloudflare.com/cdn-cgi/trace | sed -n 's/^ip=//p')
+          [ -n "$ip" ] || { echo "Could not determine the runner's public IP"; exit 1; }
+          resp=$(curl -sS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/firewall/access_rules/rules" \
+            -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+            --data "{\"mode\":\"whitelist\",\"configuration\":{\"target\":\"ip\",\"value\":\"$ip\"},\"notes\":\"Temporary: $GITHUB_REPOSITORY changelog run $GITHUB_RUN_ID\"}")
+          if [ "$(echo "$resp" | jq -r '.success')" != "true" ]; then
+            echo "$resp"; exit 1
+          fi
+          echo "rule_id=$(echo "$resp" | jq -r '.result.id')" >> "$GITHUB_OUTPUT"
+
+      # Unauthenticated, /_api/sites answers 401 once the runner is let through.
+      - name: Wait for the Cloudflare allow rule to take effect
+        run: |
+          for i in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$WIKI_URL/_api/sites" || echo 000)
+            if [ "$code" != "403" ]; then
+              echo "through the edge after $(( (i - 1) * 5 ))s (HTTP $code)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "the Cloudflare allow rule never took effect (still HTTP 403 after 120s)"
+          exit 1
+
+      - name: Publish
+        env:
+          WIKI_USERNAME: ${{ secrets.WIKI_USERNAME || vars.WIKI_USERNAME }}
+          WIKI_PASSWORD: ${{ secrets.WIKI_PASSWORD }}
+          WIKI_TFA_SECRET: ${{ secrets.WIKI_TFA_SECRET || secrets.WIKI_2FA_SECRET }}
+          WIKI_SITE_ID: ${{ secrets.WIKI_SITE_ID || vars.WIKI_SITE_ID }}
+        run: |
+          python .docs-tools/.github/scripts/wikijs_sync.py --src . --only CHANGELOG.md \
+            --prefix latex/texshelf --tags latex,typst,cli
+
+      - name: Remove the temporary Cloudflare rule
+        if: always() && steps.cf_allow.outputs.rule_id != ''
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID || vars.CF_ZONE_ID }}
+        run: |
+          curl -sS -X DELETE "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/firewall/access_rules/rules/${{ steps.cf_allow.outputs.rule_id }}" \
+            -H "Authorization: Bearer $CF_API_TOKEN" | jq '{success, errors}'

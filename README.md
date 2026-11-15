@@ -65,6 +65,11 @@ cargo install --git https://github.com/texshelf/texshelf texshelf
 
 ## Commands
 
+The full guide is at
+[docs.jjsm.science/latex/texshelf](https://docs.jjsm.science/latex/texshelf),
+written in [texshelf/docs](https://github.com/texshelf/docs). What changed in
+each release is in [CHANGELOG.md](CHANGELOG.md).
+
 | Command | What it does |
 | --- | --- |
 | `init <name>[@version] [dir]` | Download a template, check its checksum, unpack it, fill in its variables and run `git init` |
