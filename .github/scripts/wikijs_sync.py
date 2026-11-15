@@ -341,6 +341,10 @@ class Wiki:
     def logout(self):
         self._req("POST", "/auth/logout", {})
 
+    def primary_locale(self):
+        site = self._req("GET", "/sites/current", base=self.api) or {}
+        return (site.get("locales") or {}).get("primary")
+
     def locale_codes(self):
         """{URL segment or code: locale code} for the site's active locales.
 
@@ -369,7 +373,9 @@ class Wiki:
         """{path: id} of the pages at or under prefix (there is no lookup by path).
 
         Without a locale the tree lists every locale, and the same path in two
-        languages would collide; pass one whenever the docs are translated."""
+        languages collides: an update could land on the copy nobody is served.
+        So no locale means the site's primary one."""
+        locale = locale or self.primary_locale()
         parent = prefix.rsplit("/", 1)[0] if "/" in prefix else ""
         index, offset, limit = {}, 0, 500
         while True:
