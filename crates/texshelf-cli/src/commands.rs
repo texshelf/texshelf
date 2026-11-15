@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -10,6 +9,8 @@ use texshelf_core::fetch;
 use texshelf_core::index::{Entry, Index, Query, Sort, Stats, Store, VersionEntry};
 use texshelf_core::manifest::{Engine, Manifest, CATEGORIES};
 use texshelf_core::{DEFAULT_INDEX_URL, SITE_URL};
+
+use crate::style;
 
 pub(crate) fn cache_dir() -> Result<PathBuf> {
     if let Some(dir) = std::env::var_os("TEXSHELF_CACHE_DIR") {
@@ -34,7 +35,7 @@ pub(crate) fn load() -> Result<(Index, Stats)> {
                 index.absorb(&name, theirs);
                 stats.absorb(&name, their_stats);
             }
-            Err(err) => eprintln!("warning: skipping tap `{name}` ({err:#})"),
+            Err(err) => style::warning(format!("skipping tap `{name}` ({err:#})")),
         }
     }
     Ok((index, stats))
@@ -55,19 +56,6 @@ fn resolve<'a>(index: &'a Index, spec: &str) -> Result<(&'a Entry, &'a VersionEn
     let (name, version) = split_spec(spec)?;
     let entry = index.find(name)?;
     Ok((entry, entry.version(version.as_ref())?))
-}
-
-fn ask(prompt: &str, default: &str) -> Result<String> {
-    print!("{prompt} [{default}]: ");
-    io::stdout().flush()?;
-    let mut line = String::new();
-    io::stdin().lock().read_line(&mut line)?;
-    let answer = line.trim();
-    Ok(if answer.is_empty() {
-        default.to_string()
-    } else {
-        answer.to_string()
-    })
 }
 
 fn git_init(dir: &Path) -> bool {
@@ -123,13 +111,13 @@ pub fn init(
         }
         values.insert(key.to_string(), value.to_string());
     }
-    let interactive = !yes && io::stdin().is_terminal();
+    let interactive = !yes && style::interactive();
     for (key, var) in &version.variables {
         if values.contains_key(key) {
             continue;
         }
         let value = if interactive {
-            ask(&var.prompt, &var.default)?
+            style::input(&var.prompt, &var.default)?
         } else {
             var.default.clone()
         };
@@ -163,8 +151,9 @@ pub fn init(
     let repo = !no_git && git_init(&dir);
 
     println!(
-        "Created {}/ from {} {} ({}, {} {}{})",
-        dir.display(),
+        "{} {}/ from {} {} ({}, {} {}{})",
+        style::good("Created"),
+        style::strong(dir.display()),
         entry.name,
         version.version,
         entry.license,
@@ -173,15 +162,22 @@ pub fn init(
         if repo { ", git repository" } else { "" }
     );
     for key in missing {
-        println!("note: the placeholder for `{key}` was not found, so it was left unchanged");
+        style::note(format!(
+            "the placeholder for `{key}` was not found, so it was left unchanged"
+        ));
     }
     if version.shell_escape {
-        println!("note: this template needs shell-escape, which lets the document run commands");
+        style::note("this template needs shell-escape, which lets the document run commands");
     }
     if let Some(tap) = entry.tap() {
-        println!("note: this template comes from the tap `{tap}`, which texshelf does not review");
+        style::note(format!(
+            "this template comes from the tap `{tap}`, which texshelf does not review"
+        ));
     }
-    println!("Compile with: {}", entry.compile_hint(version));
+    println!(
+        "Compile with: {}",
+        style::command(entry.compile_hint(version))
+    );
     Ok(())
 }
 
@@ -288,26 +284,45 @@ pub fn search(
             *w = (*w).max(cell.chars().count());
         }
     }
-    let line = |cells: &[String]| {
-        let mut out = String::new();
-        for (i, cell) in cells.iter().enumerate() {
-            if i + 1 == cells.len() {
-                out.push_str(cell);
-            } else {
-                out.push_str(&format!("{cell:<w$}  ", w = width[i]));
-            }
-        }
-        out
+    let pad = |cells: &[String]| -> Vec<String> {
+        cells
+            .iter()
+            .enumerate()
+            .map(|(i, cell)| {
+                if i + 1 == cells.len() {
+                    cell.clone()
+                } else {
+                    format!("{cell:<w$}", w = width[i])
+                }
+            })
+            .collect()
     };
-    println!("{}", line(&head.map(String::from)));
+    let titles: Vec<String> = pad(&head.map(String::from))
+        .into_iter()
+        .map(|title| style::faint(title).to_string())
+        .collect();
+    println!("{}", titles.join("  "));
     for (row, entry) in rows.iter().zip(shown) {
-        let mark = if entry.official { "  (official)" } else { "" };
-        println!("{}{mark}", line(row));
+        let cells = pad(row);
+        let mark = if entry.official {
+            format!("  {}", style::good("(official)"))
+        } else {
+            String::new()
+        };
+        println!(
+            "{}  {}  {}{mark}",
+            style::strong(&cells[0]),
+            style::engine(entry.engine, &cells[1]),
+            cells[2..].join("  ")
+        );
     }
     if hits.len() > shown.len() {
         println!(
-            "{} more; raise --limit to see them",
-            hits.len() - shown.len()
+            "{}",
+            style::faint(format!(
+                "{} more; raise --limit to see them",
+                hits.len() - shown.len()
+            ))
         );
     }
     Ok(())
@@ -325,12 +340,17 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
         .get(&entry.name)
         .copied()
         .unwrap_or_default();
-    let row = |label: &str, value: &str| println!("{label:<12}{value}");
+    let row =
+        |label: &str, value: &str| println!("{}{value}", style::faint(format!("{label:<12}")));
     println!(
         "{} {}{}",
-        entry.name,
+        style::strong(&entry.name),
         version.version,
-        if entry.official { " (official)" } else { "" }
+        if entry.official {
+            format!(" {}", style::good("(official)"))
+        } else {
+            String::new()
+        }
     );
     println!("{}\n", entry.description);
     row("Title", &entry.title);
@@ -381,6 +401,11 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
                 if n == 1 { "" } else { "s" }
             ),
         };
+        let result = if audit.findings.is_empty() {
+            style::good(result).to_string()
+        } else {
+            style::bad(result).to_string()
+        };
         row("Audit", &format!("{result}, checked {day}"));
     }
     if !version.variables.is_empty() {
@@ -389,7 +414,7 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
             println!("  {key:<10}{} (default: {})", var.prompt, var.default);
         }
     }
-    println!("\n{bin} init {}", entry.name);
+    println!("\n{}", style::command(format!("{bin} init {}", entry.name)));
     if entry.tap().is_none() {
         println!("{SITE_URL}/t/{}", entry.name);
     }
@@ -480,7 +505,7 @@ pub fn update() -> Result<()> {
     for (name, tap) in crate::taps::stores(&cache_dir()?)? {
         match tap.refresh() {
             Ok(count) => println!("{count} templates in the tap `{name}` ({})", tap.url),
-            Err(err) => eprintln!("warning: could not refresh the tap `{name}` ({err:#})"),
+            Err(err) => style::warning(format!("could not refresh the tap `{name}` ({err:#})")),
         }
     }
     Ok(())
@@ -495,8 +520,10 @@ pub fn validate(path: &Path) -> Result<()> {
         bail!("{} problem(s):\n  {}", errors.len(), errors.join("\n  "));
     }
     println!(
-        "{} {} is valid",
-        manifest.template.name, manifest.template.version
+        "{} {} {}",
+        manifest.template.name,
+        manifest.template.version,
+        style::good("is valid")
     );
     Ok(())
 }

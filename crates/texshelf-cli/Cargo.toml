@@ -20,7 +20,7 @@ name = "typshelf"
 path = "src/bin/typshelf.rs"
 
 [dependencies]
-texshelf-core = { path = "../texshelf-core", version = "0.2.0" }
+texshelf-core = { path = "../texshelf-core", version = "0.2.1" }
 anyhow.workspace = true
 clap.workspace = true
 clap_complete = "4"
@@ -29,7 +29,12 @@ serde_json.workspace = true
 semver.workspace = true
 toml.workspace = true
 directories = "5"
+console = "0.15"
+dialoguer = { version = "0.11", default-features = false }
 open = "5"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3"

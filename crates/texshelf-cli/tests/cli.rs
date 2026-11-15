@@ -381,7 +381,7 @@ fn tex_install_lists_choices_and_prints_commands() {
     assert!(out.contains("tex install <name>"), "{out}");
 
     let typst_first = run(TYPSHELF, home.path(), work.path(), &["tex", "install"]);
-    assert!(text(&typst_first.stdout).contains("1. typst"));
+    assert!(text(&typst_first.stdout).starts_with("typst"));
 
     let printed = run(
         TEXSHELF,

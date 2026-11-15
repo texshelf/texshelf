@@ -2,6 +2,7 @@ mod author;
 mod commands;
 mod doctor;
 mod install;
+mod style;
 mod taps;
 
 use std::path::PathBuf;
@@ -183,7 +184,20 @@ enum TapCommand {
     List,
 }
 
+/// Lets `texshelf search | head` end quietly instead of failing on a closed pipe.
+#[cfg(unix)]
+fn quiet_on_closed_pipe() {
+    // SAFETY: called once at startup, before any other thread exists.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+}
+
+#[cfg(not(unix))]
+fn quiet_on_closed_pipe() {}
+
 pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
+    quiet_on_closed_pipe();
     let matches = Cli::command().name(bin).bin_name(bin).get_matches();
     let cli = match <Cli as clap::FromArgMatches>::from_arg_matches(&matches) {
         Ok(cli) => cli,
@@ -252,7 +266,7 @@ pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("error: {err:#}");
+            style::error(format!("{err:#}"));
             ExitCode::FAILURE
         }
     }

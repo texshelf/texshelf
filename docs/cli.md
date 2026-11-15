@@ -90,7 +90,8 @@ picks the vendor's own install command for your system, shows it, and runs it
 once you agree.
 
 With no name it lists what this system can install, with the recommended one
-first, and asks which you want. `typshelf tex install` puts Typst first.
+first, and you pick one with the arrow keys. Anything already on the machine
+is marked as installed. `typshelf tex install` puts Typst first.
 
 | Name | What you get | Offered on |
 | --- | --- | --- |
@@ -164,3 +165,4 @@ it finds. See [Manifest format](manifest.md).
 | `TEXSHELF_CACHE_DIR` | Cache folder for the index, archives and previews |
 | `TEXSHELF_CONFIG_DIR` | Folder for `config.toml`, which holds the taps |
 | `HTTPS_PROXY`, `NO_PROXY` | Honoured for downloads |
+| `NO_COLOR` | Set it to turn colours off. Output that is piped or saved to a file never has colour. |

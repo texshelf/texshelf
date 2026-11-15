@@ -6,6 +6,8 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use texshelf_core::index::{is_slug, Store};
 
+use crate::style;
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Config {
     #[serde(default)]
@@ -94,7 +96,7 @@ pub fn add(cache: &Path, name: &str, given: &str) -> Result<()> {
         if count == 1 { "" } else { "s" }
     );
     println!("Its templates are listed as {name}/<template>.");
-    println!("note: texshelf does not review or audit templates from taps");
+    style::note("texshelf does not review or audit templates from taps");
     Ok(())
 }
 
@@ -120,7 +122,7 @@ pub fn list() -> Result<()> {
     }
     let width = config.taps.keys().map(String::len).max().unwrap_or(0);
     for (name, url) in &config.taps {
-        println!("{name:<width$}  {url}");
+        println!("{}  {url}", style::strong(format!("{name:<width$}")));
     }
     Ok(())
 }

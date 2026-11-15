@@ -153,7 +153,11 @@ files = ["{entry}"]
         fs::write(dir.join(".gitignore"), LATEX_IGNORE)?;
     }
 
-    println!("Created {} with {entry} and {MANIFEST}", dir.display());
+    println!(
+        "{} {} with {entry} and {MANIFEST}",
+        crate::style::good("Created"),
+        crate::style::strong(dir.display())
+    );
     println!("Next:");
     println!("  1. Write the template and fill in {MANIFEST} (description, license, variables).");
     println!("  2. Commit it and push it to a public GitHub repository, with a LICENSE file.");

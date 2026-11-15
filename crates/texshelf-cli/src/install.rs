@@ -1,9 +1,10 @@
-use std::io::{self, BufRead, IsTerminal, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use texshelf_core::manifest::Engine;
+
+use crate::style;
 
 /// How a distribution gets onto this machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,41 +187,73 @@ fn command_line(how: &How) -> String {
     }
 }
 
-fn ask(prompt: &str) -> Result<String> {
-    print!("{prompt}");
-    io::stdout().flush()?;
-    let mut line = String::new();
-    io::stdin().lock().read_line(&mut line)?;
-    Ok(line.trim().to_string())
+/// The folder a program really lives in, with links followed.
+fn home_of(tool: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(tool))
+        .find(|file| file.is_file())
+        .and_then(|file| std::fs::canonicalize(file).ok())
 }
 
-fn pick<'a>(bin: &str, list: &'a [Choice]) -> Result<Option<&'a Choice>> {
-    let present: Vec<&str> = ["pdflatex", "xelatex", "lualatex", "tectonic", "typst"]
-        .into_iter()
-        .filter(|tool| on_path(tool))
-        .collect();
-    if !present.is_empty() {
-        println!("Already installed: {}\n", present.join(", "));
+/// Which choice the LaTeX on this machine came from, judged by where pdflatex lives.
+fn latex_origin(os: &str, pdflatex: Option<&Path>) -> Option<&'static str> {
+    let place = pdflatex?.to_string_lossy().to_lowercase();
+    Some(if place.contains("tinytex") {
+        "tinytex"
+    } else if place.contains("miktex") {
+        "miktex"
+    } else if os == "macos" {
+        "mactex"
+    } else {
+        "texlive"
+    })
+}
+
+fn installed(os: &str) -> Vec<&'static str> {
+    let mut found = Vec::new();
+    found.extend(latex_origin(os, home_of("pdflatex").as_deref()));
+    if on_path("tectonic") {
+        found.push("tectonic");
     }
-    for (number, choice) in list.iter().enumerate() {
-        println!("{}. {:<9} {}", number + 1, choice.id, choice.about);
-        println!("   {}", command_line(&choice.how));
+    if on_path("typst") {
+        found.push("typst");
     }
-    if !io::stdin().is_terminal() {
+    found
+}
+
+fn pick<'a>(bin: &str, list: &'a [Choice], have: &[&str]) -> Result<Option<&'a Choice>> {
+    let width = list.iter().map(|c| c.id.len()).max().unwrap_or(0);
+    let label = |choice: &Choice| {
+        let status = if have.is_empty() {
+            String::new()
+        } else if have.contains(&choice.id) {
+            format!("{}  ", style::good("installed"))
+        } else {
+            format!("{:9}  ", "")
+        };
+        format!(
+            "{}  {status}{}",
+            style::strong(format!("{:<width$}", choice.id)),
+            choice.about
+        )
+    };
+    if !style::interactive() {
+        for choice in list {
+            println!("{}", label(choice));
+            println!(
+                "{:width$}  {}",
+                "",
+                style::command(command_line(&choice.how))
+            );
+        }
         println!("\nInstall one with: {bin} tex install <name>");
         return Ok(None);
     }
-    let answer = ask("\nWhich one? Enter a number, or nothing to cancel: ")?;
-    if answer.is_empty() {
-        return Ok(None);
-    }
-    let found = match answer.parse::<usize>() {
-        Ok(number) => number.checked_sub(1).and_then(|i| list.get(i)),
-        Err(_) => list.iter().find(|c| c.id == answer),
-    };
-    found
-        .map(Some)
-        .with_context(|| format!("`{answer}` is not one of the choices"))
+    let labels: Vec<String> = list.iter().map(label).collect();
+    let start = list.iter().position(|c| !have.contains(&c.id)).unwrap_or(0);
+    let chosen = style::choose("Install which one? (Esc to cancel)", &labels, start)?;
+    Ok(chosen.map(|index| &list[index]))
 }
 
 fn execute(how: &How) -> Result<()> {
@@ -237,7 +270,9 @@ fn execute(how: &How) -> Result<()> {
 }
 
 pub fn run(bin: &str, engine: Engine, name: Option<String>, print: bool, yes: bool) -> Result<()> {
-    let list = choices(std::env::consts::OS, engine, &on_path);
+    let os = std::env::consts::OS;
+    let list = choices(os, engine, &on_path);
+    let have = installed(os);
     let choice = match name {
         Some(name) => list.iter().find(|c| c.id == name).with_context(|| {
             let ids: Vec<&str> = list.iter().map(|c| c.id).collect();
@@ -246,7 +281,7 @@ pub fn run(bin: &str, engine: Engine, name: Option<String>, print: bool, yes: bo
                 ids.join(", ")
             )
         })?,
-        None => match pick(bin, &list)? {
+        None => match pick(bin, &list, &have)? {
             Some(choice) => choice,
             None => return Ok(()),
         },
@@ -256,28 +291,36 @@ pub fn run(bin: &str, engine: Engine, name: Option<String>, print: bool, yes: bo
         println!("{}", command_line(&choice.how));
         return Ok(());
     }
-    println!("{}: {}", choice.name, choice.about);
+    println!("{}: {}", style::strong(choice.name), choice.about);
+    if have.contains(&choice.id) {
+        style::note(format!("{} is already installed here", choice.name));
+    }
     if let Some(note) = &choice.note {
-        println!("note: {note}");
+        style::note(note);
     }
     if let How::Manual(steps) = &choice.how {
         println!("{steps}");
         println!("texshelf cannot run this one for you.");
         return Ok(());
     }
-    println!("This runs:\n\n  {}\n", command_line(&choice.how));
+    println!(
+        "This runs:\n\n  {}\n",
+        style::command(command_line(&choice.how))
+    );
     if !yes {
-        if !io::stdin().is_terminal() {
+        if !style::interactive() {
             bail!("pass --yes to run it without being asked");
         }
-        let answer = ask("Run it now? [y/N]: ")?;
-        if !matches!(answer.as_str(), "y" | "Y" | "yes") {
+        if !style::confirm("Run it now?")? {
             println!("Nothing was installed.");
             return Ok(());
         }
     }
     execute(&choice.how)?;
-    println!("\nDone. Open a new terminal, then run `{bin} doctor` to check the result.");
+    println!(
+        "\n{} Open a new terminal, then run `{bin} doctor` to check the result.",
+        style::good("Done.")
+    );
     Ok(())
 }
 
@@ -330,5 +373,33 @@ mod tests {
             "winget install -e --id MiKTeX.MiKTeX"
         );
         assert!(matches!(windows[2].how, How::Manual(_)));
+    }
+
+    #[test]
+    fn tells_where_latex_came_from() {
+        let origin = |os, path: &str| latex_origin(os, Some(Path::new(path)));
+        assert_eq!(
+            origin(
+                "macos",
+                "/Users/a/Library/TinyTeX/bin/universal-darwin/pdftex"
+            ),
+            Some("tinytex")
+        );
+        assert_eq!(
+            origin(
+                "macos",
+                "/usr/local/texlive/2025/bin/universal-darwin/pdftex"
+            ),
+            Some("mactex")
+        );
+        assert_eq!(origin("linux", "/usr/bin/pdftex"), Some("texlive"));
+        assert_eq!(
+            origin(
+                "windows",
+                "C:/Users/a/AppData/Local/Programs/MiKTeX/miktex/bin/x64/pdflatex.exe"
+            ),
+            Some("miktex")
+        );
+        assert_eq!(latex_origin("linux", None), None);
     }
 }

@@ -5,6 +5,8 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 
+use crate::style;
+
 const TOOLS: &[(&str, &str, &str)] = &[
     ("pdflatex", "--version", "LaTeX compiler"),
     ("xelatex", "--version", "LaTeX compiler with system fonts"),
@@ -92,16 +94,16 @@ fn check_packages(file: &Path) -> Result<()> {
         needed.len()
     );
     if missing.is_empty() {
-        println!("All of them are installed.");
+        println!("{}", style::good("All of them are installed."));
     } else {
-        println!("Missing: {}", missing.join(", "));
+        println!("{} {}", style::bad("Missing:"), missing.join(", "));
         let names: Vec<&str> = missing
             .iter()
             .filter_map(|m| m.rsplit_once('.').map(|(n, _)| n))
             .collect();
         println!(
-            "With TeX Live or TinyTeX, try: tlmgr install {}",
-            names.join(" ")
+            "With TeX Live or TinyTeX, try: {}",
+            style::command(format!("tlmgr install {}", names.join(" ")))
         );
         println!("A file name is not always the package name; `tlmgr search --file <name>` finds the owner.");
     }
@@ -114,9 +116,18 @@ pub fn run(file: Option<PathBuf>) -> Result<()> {
         match version(tool, flag) {
             Some(v) => {
                 any_latex |= tool.ends_with("latex") || *tool == "tectonic";
-                println!("ok       {tool:<9} {v}");
+                println!(
+                    "{}  {} {v}",
+                    style::good("ok     "),
+                    style::strong(format!("{tool:<9}"))
+                );
             }
-            None => println!("missing  {tool:<9} {purpose}"),
+            None => println!(
+                "{}  {} {}",
+                style::bad("missing"),
+                style::strong(format!("{tool:<9}")),
+                style::faint(purpose)
+            ),
         }
     }
     if !any_latex {
