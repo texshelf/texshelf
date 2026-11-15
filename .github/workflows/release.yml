@@ -60,3 +60,20 @@ jobs:
             texshelf-*.zip
             texshelf-*.sha256
           generate_release_notes: true
+
+  # Tells homebrew-tap to write the formula for this release now instead of on
+  # its next 6-hourly check. Starting a workflow in another repository needs a
+  # token: a fine-grained one with "Actions: read and write" on homebrew-tap.
+  homebrew:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update the Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set, so the tap picks up this release on its next scheduled run."
+            exit 0
+          fi
+          gh workflow run update.yml --repo texshelf/homebrew-tap

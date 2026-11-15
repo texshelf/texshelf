@@ -36,32 +36,60 @@ at [tex.jjsm.science](https://tex.jjsm.science).
 
 ## Install
 
-macOS and Linux, with Homebrew:
+### macOS and Linux
+
+With Homebrew:
 
 ```console
 brew install texshelf/tap/texshelf
 ```
 
-macOS and Linux, without Homebrew:
+Without Homebrew, run the installer. It downloads the latest release, checks
+its SHA-256 and puts `texshelf` and `typshelf` in `~/.local/bin`. On Linux it
+needs `curl` and `tar`, and builds exist for x86-64 and ARM64.
 
 ```console
 curl -fsSL https://tex.jjsm.science/install.sh | sh
 ```
 
-Windows, in PowerShell:
+If it says the folder is not on your `PATH`, add it (to `~/.bashrc` instead
+if that is your shell's file) and open a new terminal:
 
 ```console
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+### Windows
+
+In PowerShell, without administrator mode:
+
+```powershell
 irm https://tex.jjsm.science/install.ps1 | iex
 ```
 
-The two scripts download the latest release from GitHub, check its SHA-256,
-and put `texshelf` and `typshelf` in `~/.local/bin` (on Windows,
-`%LOCALAPPDATA%\texshelf\bin`). With [Rust](https://rustup.rs) 1.82 or newer
-you can build from source instead:
+It downloads the latest release, checks its SHA-256, puts `texshelf.exe` and
+`typshelf.exe` in `%LOCALAPPDATA%\texshelf\bin` and adds that folder to your
+`PATH`. Open a new PowerShell window afterwards.
+
+### From source
+
+With [Rust](https://rustup.rs) 1.82 or newer:
+
+```console
+cargo install texshelf
+```
+
+Or the current `main` branch:
 
 ```console
 cargo install --git https://github.com/texshelf/texshelf texshelf
 ```
+
+Check the install with `texshelf --version`. Both installers read
+`TEXSHELF_INSTALL_DIR` to install somewhere else and `TEXSHELF_VERSION` to pin
+a release, such as `v0.2.1`. texshelf does not include a compiler:
+`texshelf doctor` lists the TeX and Typst tools it finds, and
+`texshelf tex install` installs one if you have none.
 
 ## Commands
 
