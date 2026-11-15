@@ -46,23 +46,26 @@ fn write(config: &Config) -> Result<()> {
 /// Turns what the user typed into the address of an `index.json`.
 fn index_url(given: &str) -> Result<String> {
     let given = given.trim_end_matches('/');
-    let url = if given.starts_with("https://") {
-        given.to_string()
-    } else if given.starts_with("http://") {
+    if given.starts_with("http://") {
         bail!("a tap has to be served over https, because its index holds the checksums");
-    } else {
-        fs::canonicalize(given)
-            .with_context(|| {
-                format!("`{given}` is neither an https address nor a path that exists")
-            })?
-            .display()
-            .to_string()
-    };
-    Ok(if url.ends_with(".json") {
-        url
-    } else {
-        format!("{url}/index.json")
-    })
+    }
+    if given.starts_with("https://") {
+        return Ok(if given.ends_with(".json") {
+            given.to_string()
+        } else {
+            format!("{given}/index.json")
+        });
+    }
+    let path = Path::new(given);
+    if !path.exists() {
+        bail!("`{given}` is neither an https address nor a path that exists");
+    }
+    // Not canonicalize: on Windows it returns a \\?\ path, where `/` is not a separator.
+    let mut path = std::path::absolute(path)?;
+    if !given.ends_with(".json") {
+        path.push("index.json");
+    }
+    Ok(path.display().to_string())
 }
 
 /// Every tap as (name, store), in name order.

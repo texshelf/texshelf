@@ -192,6 +192,13 @@ fn home_of(tool: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .map(|dir| dir.join(tool))
+        .map(|file| {
+            if cfg!(windows) {
+                file.with_extension("exe")
+            } else {
+                file
+            }
+        })
         .find(|file| file.is_file())
         .and_then(|file| std::fs::canonicalize(file).ok())
 }
