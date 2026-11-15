@@ -11,7 +11,7 @@ use texshelf_core::index::{Entry, Index, Query, Sort, Stats, Store, VersionEntry
 use texshelf_core::manifest::{Engine, Manifest, CATEGORIES};
 use texshelf_core::{DEFAULT_INDEX_URL, SITE_URL};
 
-fn cache_dir() -> Result<PathBuf> {
+pub(crate) fn cache_dir() -> Result<PathBuf> {
     if let Some(dir) = std::env::var_os("TEXSHELF_CACHE_DIR") {
         return Ok(PathBuf::from(dir));
     }
@@ -25,8 +25,19 @@ fn store() -> Result<Store> {
     Ok(Store::new(url, cache_dir()?))
 }
 
+/// Loads the main index and adds every tap. A tap that cannot be read is skipped.
 pub(crate) fn load() -> Result<(Index, Stats)> {
-    store()?.load()
+    let (mut index, mut stats) = store()?.load()?;
+    for (name, tap) in crate::taps::stores(&cache_dir()?)? {
+        match tap.load() {
+            Ok((theirs, their_stats)) => {
+                index.absorb(&name, theirs);
+                stats.absorb(&name, their_stats);
+            }
+            Err(err) => eprintln!("warning: skipping tap `{name}` ({err:#})"),
+        }
+    }
+    Ok((index, stats))
 }
 
 fn split_spec(spec: &str) -> Result<(&str, Option<Version>)> {
@@ -84,7 +95,7 @@ pub fn init(
 ) -> Result<()> {
     let (index, _) = load()?;
     let (entry, version) = resolve(&index, spec)?;
-    let dir = dir.unwrap_or_else(|| PathBuf::from(&entry.name));
+    let dir = dir.unwrap_or_else(|| PathBuf::from(entry.short_name()));
 
     let occupied = fs::read_dir(&dir)
         .map(|mut d| d.next().is_some())
@@ -166,6 +177,9 @@ pub fn init(
     }
     if version.shell_escape {
         println!("note: this template needs shell-escape, which lets the document run commands");
+    }
+    if let Some(tap) = entry.tap() {
+        println!("note: this template comes from the tap `{tap}`, which texshelf does not review");
     }
     println!("Compile with: {}", entry.compile_hint(version));
     Ok(())
@@ -328,6 +342,9 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
             (None, None) => entry.engine.to_string(),
         },
     );
+    if let Some(tap) = entry.tap() {
+        row("Tap", &format!("{tap} (not reviewed by texshelf)"));
+    }
     if !entry.universities.is_empty() {
         row("University", &entry.universities.join(", "));
     }
@@ -373,7 +390,9 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
         }
     }
     println!("\n{bin} init {}", entry.name);
-    println!("{SITE_URL}/t/{}", entry.name);
+    if entry.tap().is_none() {
+        println!("{SITE_URL}/t/{}", entry.name);
+    }
     Ok(())
 }
 
@@ -388,6 +407,12 @@ pub fn view(spec: &str, web: bool) -> Result<()> {
     let (index, _) = load()?;
     let (entry, version) = resolve(&index, spec)?;
     if web {
+        if entry.tap().is_some() {
+            bail!(
+                "{} comes from a tap, so it has no page on {SITE_URL}",
+                entry.name
+            );
+        }
         launch(&format!("{SITE_URL}/t/{}", entry.name));
         return Ok(());
     }
@@ -399,7 +424,11 @@ pub fn view(spec: &str, web: bool) -> Result<()> {
         );
     };
     let dir = cache_dir()?.join("previews");
-    let path = dir.join(format!("{}-{}.pdf", entry.name, version.version));
+    let path = dir.join(format!(
+        "{}-{}.pdf",
+        entry.name.replace('/', "-"),
+        version.version
+    ));
     if !path.exists() {
         let bytes = fetch::get(url).with_context(|| format!("could not download {url}"))?;
         fs::create_dir_all(&dir)?;
@@ -448,6 +477,12 @@ pub fn update() -> Result<()> {
     let store = store()?;
     let count = store.refresh()?;
     println!("{count} templates in the index ({})", store.url);
+    for (name, tap) in crate::taps::stores(&cache_dir()?)? {
+        match tap.refresh() {
+            Ok(count) => println!("{count} templates in the tap `{name}` ({})", tap.url),
+            Err(err) => eprintln!("warning: could not refresh the tap `{name}` ({err:#})"),
+        }
+    }
     Ok(())
 }
 

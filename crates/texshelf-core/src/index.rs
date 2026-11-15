@@ -123,7 +123,26 @@ pub struct Stat {
     pub downloads: u64,
 }
 
+impl Stats {
+    /// Adds the stats of a tap under the same `tap/name` keys that `Index::absorb` uses.
+    pub fn absorb(&mut self, tap: &str, other: Stats) {
+        for (name, stat) in other.templates {
+            self.templates.insert(format!("{tap}/{name}"), stat);
+        }
+    }
+}
+
 impl Entry {
+    /// The name without its tap prefix: `lab-report` for `uc/lab-report`.
+    pub fn short_name(&self) -> &str {
+        self.name.rsplit('/').next().unwrap_or(&self.name)
+    }
+
+    /// The tap this template came from, or `None` for the main registry.
+    pub fn tap(&self) -> Option<&str> {
+        self.name.split_once('/').map(|(tap, _)| tap)
+    }
+
     pub fn version(&self, wanted: Option<&Version>) -> Result<&VersionEntry> {
         let target = wanted.unwrap_or(&self.latest);
         self.versions
@@ -158,10 +177,56 @@ impl Entry {
     }
 }
 
+/// True for names a registry may use: lowercase letters, digits and hyphens.
+pub fn is_slug(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 40
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
 impl Index {
+    /// Adds the templates of a tap, renamed to `tap/name`. Returns how many were added.
+    ///
+    /// A tap cannot mark its own templates as official or verified, and entries
+    /// whose names are not plain slugs are left out.
+    pub fn absorb(&mut self, tap: &str, other: Index) -> usize {
+        let before = self.templates.len();
+        for mut entry in other.templates {
+            if !is_slug(&entry.name) {
+                continue;
+            }
+            entry.name = format!("{tap}/{}", entry.name);
+            entry.official = false;
+            entry.verified = false;
+            self.templates.push(entry);
+        }
+        self.templates.len() - before
+    }
+
     pub fn find(&self, name: &str) -> Result<&Entry> {
         if let Some(entry) = self.templates.iter().find(|t| t.name == name) {
             return Ok(entry);
+        }
+        if !name.contains('/') {
+            let tail = format!("/{name}");
+            let tapped: Vec<&Entry> = self
+                .templates
+                .iter()
+                .filter(|t| t.name.ends_with(&tail))
+                .collect();
+            match tapped.as_slice() {
+                [] => {}
+                [only] => return Ok(only),
+                several => {
+                    let names: Vec<&str> = several.iter().map(|t| t.name.as_str()).collect();
+                    bail!(
+                        "more than one tap has a template named `{name}`. Pick one: {}",
+                        names.join(", ")
+                    );
+                }
+            }
         }
         let near: Vec<&str> = self
             .templates
@@ -522,6 +587,46 @@ mod tests {
             ["article", "arxiv-style"]
         );
         assert!(find(&wanted(&["Oxford"])).is_empty());
+    }
+
+    #[test]
+    fn taps_are_prefixed_and_found_by_short_name() {
+        let (mut index, mut stats) = sample();
+        let tap = |names: &[&str]| Index {
+            schema: 1,
+            generated_at: String::new(),
+            templates: names
+                .iter()
+                .map(|n| entry(n, Engine::Latex, true, "2026-04-01", &["report"]))
+                .collect(),
+        };
+        assert_eq!(
+            index.absorb("uc", tap(&["lab-report", "article", "../x"])),
+            2
+        );
+        let mut theirs = Stats::default();
+        theirs
+            .templates
+            .insert("lab-report".into(), Stat::default());
+        stats.absorb("uc", theirs);
+        assert!(stats.templates.contains_key("uc/lab-report"));
+
+        let found = index.find("lab-report").unwrap();
+        assert_eq!(found.name, "uc/lab-report");
+        assert_eq!(
+            (found.short_name(), found.tap()),
+            ("lab-report", Some("uc"))
+        );
+        assert!(!found.official);
+        assert_eq!(index.find("article").unwrap().name, "article");
+        assert_eq!(index.find("uc/article").unwrap().name, "uc/article");
+
+        index.absorb("lab", tap(&["lab-report"]));
+        let err = index.find("lab-report").unwrap_err().to_string();
+        assert!(
+            err.contains("uc/lab-report") && err.contains("lab/lab-report"),
+            "{err}"
+        );
     }
 
     #[test]

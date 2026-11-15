@@ -50,3 +50,4 @@ The last line it prints is the command that compiles the document.
 - [Command reference](cli.md)
 - [Manifest format](manifest.md)
 - [Publishing a template](publishing.md)
+- [Taps: registries run by someone else](taps.md)

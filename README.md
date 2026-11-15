@@ -74,6 +74,8 @@ cargo install --git https://github.com/texshelf/texshelf texshelf
 | `open <name>` | Open the template in Overleaf, or in the Typst web app when it is on Typst Universe |
 | `update` | Refresh the local copy of the index (also happens by itself once a day) |
 | `doctor [file.tex]` | List the TeX and Typst tools installed, and the packages a document uses that are missing |
+| `tex install [name]` | Install TinyTeX, Tectonic, full TeX Live, MiKTeX or Typst with the vendor's own command |
+| `tap add <name> <address>` | Use templates from another registry, such as your university's. Also `tap list` and `tap remove`. |
 | `new-template <dir>` | Start a template of your own, with a starter document and `texshelf.toml` |
 | `publish` | Submit the template in the current folder to the registry |
 | `validate <manifest>` | Check a registry manifest before you submit it |
@@ -102,6 +104,7 @@ one in the index. Archives may only contain regular files with relative paths.
 | --- | --- |
 | `TEXSHELF_INDEX_URL` | Use another index. A local file path works too. |
 | `TEXSHELF_CACHE_DIR` | Where the index, archives and previews are cached |
+| `TEXSHELF_CONFIG_DIR` | Where `config.toml`, which lists your taps, is kept |
 
 ## Repository layout
 

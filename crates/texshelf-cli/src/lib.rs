@@ -1,6 +1,8 @@
 mod author;
 mod commands;
 mod doctor;
+mod install;
+mod taps;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -137,8 +139,48 @@ enum Command {
         #[arg(long)]
         print: bool,
     },
+    /// Install a TeX distribution or Typst
+    Tex {
+        #[command(subcommand)]
+        command: TexCommand,
+    },
+    /// Use templates from another registry, such as your university's
+    Tap {
+        #[command(subcommand)]
+        command: TapCommand,
+    },
     /// Print a shell completion script
     Completions { shell: clap_complete::Shell },
+}
+
+#[derive(Subcommand)]
+enum TexCommand {
+    /// Show what can be installed on this system, or install one of them
+    Install {
+        /// tinytex, tectonic, mactex, texlive, miktex or typst
+        name: Option<String>,
+        /// Print the install command without running it
+        #[arg(long)]
+        print: bool,
+        /// Run the installer without asking first
+        #[arg(short, long)]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TapCommand {
+    /// Add a registry: tap add uc https://example.org/v1/index.json
+    Add {
+        /// Short name; its templates are listed as <name>/<template>
+        name: String,
+        /// Address of the registry's index.json, or a local folder that holds one
+        url: String,
+    },
+    /// Stop using a registry
+    Remove { name: String },
+    /// Show the registries in use
+    List,
 }
 
 pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
@@ -194,6 +236,14 @@ pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
             category,
         } => author::new_template(bin, &dir, engine.unwrap_or(default_engine), name, &category),
         Command::Publish { dir, print } => author::publish(dir, print),
+        Command::Tex {
+            command: TexCommand::Install { name, print, yes },
+        } => install::run(bin, engine.unwrap_or(default_engine), name, print, yes),
+        Command::Tap { command } => commands::cache_dir().and_then(|cache| match command {
+            TapCommand::Add { name, url } => taps::add(&cache, &name, &url),
+            TapCommand::Remove { name } => taps::remove(&cache, &name),
+            TapCommand::List => taps::list(),
+        }),
         Command::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), bin, &mut std::io::stdout());
             Ok(())
