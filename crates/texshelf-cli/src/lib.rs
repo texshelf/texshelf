@@ -4,6 +4,7 @@ mod doctor;
 mod install;
 mod style;
 mod taps;
+mod ui;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -198,7 +199,11 @@ fn quiet_on_closed_pipe() {}
 
 pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
     quiet_on_closed_pipe();
-    let matches = Cli::command().name(bin).bin_name(bin).get_matches();
+    let matches = Cli::command()
+        .name(bin)
+        .bin_name(bin)
+        .styles(ui::help_styles())
+        .get_matches();
     let cli = match <Cli as clap::FromArgMatches>::from_arg_matches(&matches) {
         Ok(cli) => cli,
         Err(err) => err.exit(),
@@ -237,6 +242,7 @@ pub fn run(bin: &'static str, default_engine: Engine) -> ExitCode {
             &university,
             limit,
             json,
+            bin,
         ),
         Command::Info { template, json } => commands::info(bin, &template, json),
         Command::View { template, web } => commands::view(&template, web),

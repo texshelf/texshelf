@@ -5,6 +5,15 @@ Changes to the `texshelf` and `typshelf` commands. The user guide is at
 
 ## Unreleased
 
+- Output adapts to the width of the terminal. `search` drops columns as the
+  window narrows and then switches to two lines per template, `info` wraps
+  long values, and nothing is printed wider than the window. Piped output is
+  laid out for 100 columns, or for `COLUMNS` when it is set.
+- New look for every command: results line up behind a green verb
+  (`Fetched`, `Verified`, `Created`, `Next`), `search` shows version, stars
+  and license when there is room, and `--help` is coloured.
+- `init` downloads and checks the template before it asks for the variables,
+  so a bad download fails before you type anything.
 - `tap add` with a local folder works on Windows. It used to fail with
   "os error 123".
 - `tex install` recognises a MiKTeX or TeX Live that is already installed on

@@ -5,7 +5,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 
-use crate::style;
+use crate::ui;
 
 const TOOLS: &[(&str, &str, &str)] = &[
     ("pdflatex", "--version", "LaTeX compiler"),
@@ -88,48 +88,35 @@ fn check_packages(file: &Path) -> Result<()> {
             missing.push(name.as_str());
         }
     }
-    println!(
-        "\n{}: {} packages and classes referenced",
-        file.display(),
-        needed.len()
-    );
-    if missing.is_empty() {
-        println!("{}", style::good("All of them are installed."));
-    } else {
-        println!("{} {}", style::bad("Missing:"), missing.join(", "));
-        let names: Vec<&str> = missing
-            .iter()
-            .filter_map(|m| m.rsplit_once('.').map(|(n, _)| n))
-            .collect();
-        println!(
-            "With TeX Live or TinyTeX, try: {}",
-            style::command(format!("tlmgr install {}", names.join(" ")))
-        );
-        println!("A file name is not always the package name; `tlmgr search --file <name>` finds the owner.");
-    }
+    let names: Vec<&str> = missing
+        .iter()
+        .filter_map(|m| m.rsplit_once('.').map(|(n, _)| n))
+        .collect();
+    let fix = (!names.is_empty()).then(|| format!("tlmgr install {}", names.join(" ")));
+    let missing: Vec<String> = missing.iter().map(|m| m.to_string()).collect();
+    ui::show(ui::packages(
+        &file.display().to_string(),
+        needed.len(),
+        &missing,
+        fix.as_deref(),
+        ui::width(),
+    ));
     Ok(())
 }
 
 pub fn run(file: Option<PathBuf>) -> Result<()> {
-    let mut any_latex = false;
-    for (tool, flag, purpose) in TOOLS {
-        match version(tool, flag) {
-            Some(v) => {
-                any_latex |= tool.ends_with("latex") || *tool == "tectonic";
-                println!(
-                    "{}  {} {v}",
-                    style::good("ok     "),
-                    style::strong(format!("{tool:<9}"))
-                );
-            }
-            None => println!(
-                "{}  {} {}",
-                style::bad("missing"),
-                style::strong(format!("{tool:<9}")),
-                style::faint(purpose)
-            ),
-        }
-    }
+    let found: Vec<ui::Tool> = TOOLS
+        .iter()
+        .map(|(name, flag, purpose)| ui::Tool {
+            name,
+            version: version(name, flag),
+            purpose,
+        })
+        .collect();
+    let any_latex = found
+        .iter()
+        .any(|t| t.version.is_some() && (t.name.ends_with("latex") || t.name == "tectonic"));
+    ui::show(ui::tools(&found, ui::width()));
     if !any_latex {
         println!("\nNo LaTeX compiler found. TinyTeX (https://yihui.org/tinytex/) is a small one to start with.");
     }

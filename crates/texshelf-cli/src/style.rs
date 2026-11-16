@@ -6,8 +6,9 @@ use std::io::{self, IsTerminal};
 
 use anyhow::Result;
 use console::{style, StyledObject};
-use dialoguer::theme::ColorfulTheme;
 use texshelf_core::manifest::Engine;
+
+use crate::ui;
 
 pub fn good<D: Display>(text: D) -> StyledObject<D> {
     style(text).green()
@@ -38,18 +39,15 @@ pub fn engine<D: Display>(engine: Engine, text: D) -> StyledObject<D> {
 }
 
 pub fn note(message: impl Display) {
-    println!("{} {message}", style("note:").yellow().bold());
+    ui::note(&message.to_string());
 }
 
 pub fn warning(message: impl Display) {
-    eprintln!(
-        "{} {message}",
-        style("warning:").yellow().bold().for_stderr()
-    );
+    ui::warning(&message.to_string());
 }
 
 pub fn error(message: impl Display) {
-    eprintln!("{} {message}", style("error:").red().bold().for_stderr());
+    ui::error(&message.to_string());
 }
 
 /// True when questions can be asked: both ends are a terminal.
@@ -59,22 +57,23 @@ pub fn interactive() -> bool {
 
 /// A list to move through with the arrow keys. `None` when the user presses Esc.
 pub fn choose(prompt: &str, items: &[String], start: usize) -> Result<Option<usize>> {
-    Ok(dialoguer::Select::with_theme(&ColorfulTheme::default())
+    Ok(dialoguer::Select::with_theme(&ui::theme())
         .with_prompt(prompt)
         .items(items)
         .default(start)
+        .report(false)
         .interact_opt()?)
 }
 
 pub fn confirm(prompt: &str) -> Result<bool> {
-    Ok(dialoguer::Confirm::with_theme(&ColorfulTheme::default())
+    Ok(dialoguer::Confirm::with_theme(&ui::theme())
         .with_prompt(prompt)
         .default(false)
         .interact()?)
 }
 
 pub fn input(prompt: &str, default: &str) -> Result<String> {
-    Ok(dialoguer::Input::with_theme(&ColorfulTheme::default())
+    Ok(dialoguer::Input::with_theme(&ui::theme())
         .with_prompt(prompt)
         .default(default.to_string())
         .interact_text()?)

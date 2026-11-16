@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use texshelf_core::index::{is_slug, Store};
 
 use crate::style;
+use crate::ui;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Config {
@@ -123,10 +124,8 @@ pub fn list() -> Result<()> {
         println!("No taps. Add one with: tap add <name> <address of its index.json>");
         return Ok(());
     }
-    let width = config.taps.keys().map(String::len).max().unwrap_or(0);
-    for (name, url) in &config.taps {
-        println!("{}  {url}", style::strong(format!("{name:<width$}")));
-    }
+    let taps: Vec<(String, String)> = config.taps.into_iter().collect();
+    ui::show(ui::taps(&taps, ui::width()));
     Ok(())
 }
 

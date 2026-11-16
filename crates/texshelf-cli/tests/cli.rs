@@ -97,10 +97,15 @@ fn init_creates_a_project_and_fills_variables() {
     );
     assert!(out.status.success(), "{}", text(&out.stderr));
     let stdout = text(&out.stdout);
-    assert!(
-        stdout.contains("Created report/ from plain-article 1.0.0 (MIT, 2 files)"),
-        "{stdout}"
-    );
+    for part in [
+        "plain-article 1.0.0",
+        "Created",
+        "report/",
+        "2 files",
+        "MIT",
+    ] {
+        assert!(stdout.contains(part), "{part} is not in:\n{stdout}");
+    }
     assert!(stdout.contains("latexmk -xelatex main.tex"), "{stdout}");
 
     let project = work.path().join("report");
@@ -197,6 +202,32 @@ fn search_filters_by_university_and_shows_the_compiler() {
     );
     let miss = search(&["search", "--university", "Cambridge"]);
     assert!(miss.contains("No templates match"), "{miss}");
+}
+
+#[test]
+fn output_fits_the_window() {
+    let (home, work) = setup();
+    for columns in ["40", "72", "120"] {
+        for args in [
+            &["search", "--engine", "all"][..],
+            &["info", "plain-article"],
+        ] {
+            let out = Command::new(TEXSHELF)
+                .args(args)
+                .current_dir(work.path())
+                .env("TEXSHELF_INDEX_URL", home.path().join("index.json"))
+                .env("TEXSHELF_CACHE_DIR", home.path().join("cache"))
+                .env("TEXSHELF_CONFIG_DIR", home.path().join("config"))
+                .env("COLUMNS", columns)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{}", text(&out.stderr));
+            let limit: usize = columns.parse().unwrap();
+            for line in text(&out.stdout).lines() {
+                assert!(line.chars().count() <= limit, "{columns}: {line}");
+            }
+        }
+    }
 }
 
 #[test]
@@ -335,7 +366,8 @@ fn a_tap_adds_templates_under_its_own_name() {
 
     let found = text(&run(&["search", "lab"]).stdout);
     assert!(found.contains("uc/lab-report"), "{found}");
-    assert!(!found.contains("(official)"), "{found}");
+    let row = found.lines().find(|l| l.contains("uc/lab-report")).unwrap();
+    assert!(!row.contains("official") && !row.contains('●'), "{row}");
     let info = text(&run(&["info", "uc/lab-report"]).stdout);
     assert!(info.contains("not reviewed"), "{info}");
     assert!(!info.contains("/t/uc"), "{info}");
@@ -346,7 +378,7 @@ fn a_tap_adds_templates_under_its_own_name() {
     assert!(work.path().join("lab-report/main.tex").exists());
 
     let main = run(&["info", "plain-article"]);
-    assert!(text(&main.stdout).contains("(official)"));
+    assert!(text(&main.stdout).contains("official"));
     let theirs = run(&["init", "uc/plain-article", "theirs", "--yes", "--no-git"]);
     assert!(theirs.status.success(), "{}", text(&theirs.stderr));
 
@@ -381,7 +413,8 @@ fn tex_install_lists_choices_and_prints_commands() {
     assert!(out.contains("tex install <name>"), "{out}");
 
     let typst_first = run(TYPSHELF, home.path(), work.path(), &["tex", "install"]);
-    assert!(text(&typst_first.stdout).starts_with("typst"));
+    let listed = text(&typst_first.stdout);
+    assert!(listed.find("typst") < listed.find("tinytex"), "{listed}");
 
     let printed = run(
         TEXSHELF,

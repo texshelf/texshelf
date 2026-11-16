@@ -5,6 +5,7 @@ use anyhow::{bail, Context, Result};
 use texshelf_core::manifest::Engine;
 
 use crate::style;
+use crate::ui;
 
 /// How a distribution gets onto this machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -230,36 +231,23 @@ fn installed(os: &str) -> Vec<&'static str> {
 }
 
 fn pick<'a>(bin: &str, list: &'a [Choice], have: &[&str]) -> Result<Option<&'a Choice>> {
-    let width = list.iter().map(|c| c.id.len()).max().unwrap_or(0);
-    let label = |choice: &Choice| {
-        let status = if have.is_empty() {
-            String::new()
-        } else if have.contains(&choice.id) {
-            format!("{}  ", style::good("installed"))
-        } else {
-            format!("{:9}  ", "")
-        };
-        format!(
-            "{}  {status}{}",
-            style::strong(format!("{:<width$}", choice.id)),
-            choice.about
-        )
-    };
+    let options: Vec<ui::Option_> = list
+        .iter()
+        .map(|choice| ui::Option_ {
+            id: choice.id,
+            about: choice.about,
+            installed: have.contains(&choice.id),
+            command: command_line(&choice.how),
+        })
+        .collect();
+    let w = ui::width();
     if !style::interactive() {
-        for choice in list {
-            println!("{}", label(choice));
-            println!(
-                "{:width$}  {}",
-                "",
-                style::command(command_line(&choice.how))
-            );
-        }
-        println!("\nInstall one with: {bin} tex install <name>");
+        ui::show(ui::options_listing(&options, bin, w));
         return Ok(None);
     }
-    let labels: Vec<String> = list.iter().map(label).collect();
+    let labels = ui::options(&options, w - 4);
     let start = list.iter().position(|c| !have.contains(&c.id)).unwrap_or(0);
-    let chosen = style::choose("Install which one? (Esc to cancel)", &labels, start)?;
+    let chosen = style::choose(ui::select_prompt(), &labels, start)?;
     Ok(chosen.map(|index| &list[index]))
 }
 
@@ -298,7 +286,6 @@ pub fn run(bin: &str, engine: Engine, name: Option<String>, print: bool, yes: bo
         println!("{}", command_line(&choice.how));
         return Ok(());
     }
-    println!("{}: {}", style::strong(choice.name), choice.about);
     if have.contains(&choice.id) {
         style::note(format!("{} is already installed here", choice.name));
     }
@@ -306,14 +293,17 @@ pub fn run(bin: &str, engine: Engine, name: Option<String>, print: bool, yes: bo
         style::note(note);
     }
     if let How::Manual(steps) = &choice.how {
+        println!("{}: {}", style::strong(choice.name), choice.about);
         println!("{steps}");
         println!("texshelf cannot run this one for you.");
         return Ok(());
     }
-    println!(
-        "This runs:\n\n  {}\n",
-        style::command(command_line(&choice.how))
-    );
+    ui::show(ui::about_to_run(
+        choice.name,
+        choice.about,
+        &command_line(&choice.how),
+        ui::width(),
+    ));
     if !yes {
         if !style::interactive() {
             bail!("pass --yes to run it without being asked");
@@ -325,8 +315,11 @@ pub fn run(bin: &str, engine: Engine, name: Option<String>, print: bool, yes: bo
     }
     execute(&choice.how)?;
     println!(
-        "\n{} Open a new terminal, then run `{bin} doctor` to check the result.",
-        style::good("Done.")
+        "{}",
+        ui::done(
+            "Done",
+            &format!("Open a new terminal, then run `{bin} doctor` to check the result.")
+        )
     );
     Ok(())
 }
