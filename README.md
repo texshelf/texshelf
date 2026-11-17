@@ -10,12 +10,17 @@ Start a LaTeX or Typst project from a template, the way `uv init` or
 
 ```console
 $ texshelf search thesis
-NAME        ENGINE  CATEGORY  STARS  LICENSE  UPDATED     DESCRIPTION
-phd-thesis  latex   thesis    0      MIT      2026-11-14  PhD thesis class following the Cambridge University Eng…
+NAME                    ENGINE    CATEGORY  VERSION    STARS  DESCRIPTION
+phd-thesis              pdflatex  thesis    2026.4.28  ★ 902  PhD thesis class following the Camb…
+osuc-trabajo-de-titulo  pdflatex  thesis    2026.9.17  ★ 68   Degree project (trabajo de título)…
+
+2 templates. Details: texshelf info <name>
 
 $ texshelf init phd-thesis my-thesis
-Created my-thesis/ from phd-thesis 2026.4.28 (MIT, 59 files, git repository)
-Compile with: latexmk -pdf thesis.tex
+   Fetched phd-thesis 2026.4.28
+  Verified sha256 matches the index
+   Created my-thesis/ (59 files, MIT, git repository)
+      Next cd my-thesis && latexmk -pdf thesis.tex
 ```
 
 One install gives you two commands. `texshelf` lists LaTeX templates by default
