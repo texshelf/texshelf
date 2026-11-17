@@ -7,11 +7,14 @@ Changes to the `texshelf` and `typshelf` commands. The user guide is at
 
 - Output adapts to the width of the terminal. `search` drops columns as the
   window narrows and then switches to two lines per template, `info` wraps
-  long values, and nothing is printed wider than the window. Piped output is
-  laid out for 100 columns, or for `COLUMNS` when it is set.
+  long values, and nothing else is printed wider than the window. Links are
+  never shortened, so a long one runs past the edge. Piped output is laid
+  out for 100 columns, or for `COLUMNS` when it is set. Warnings and errors
+  use the width of the terminal they go to.
 - New look for every command: results line up behind a green verb
-  (`Fetched`, `Verified`, `Created`, `Next`), `search` shows version, stars
-  and license when there is room, and `--help` is coloured.
+  (`Fetched`, `Verified`, `Created`, `Next`), official templates are marked
+  with a green dot (●), `search` shows version, stars (★) and license when
+  there is room, and `--help` is coloured.
 - `init` downloads and checks the template before it asks for the variables,
   so a bad download fails before you type anything.
 - `tap add` with a local folder works on Windows. It used to fail with

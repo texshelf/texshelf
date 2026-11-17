@@ -1,6 +1,7 @@
 //! How output is laid out: the "Quiet" style.
 //!
-//! No borders and no symbols beyond a pointer. Names are bold, labels are
+//! No borders. The only symbols are a dot for official templates, a star
+//! before the star count and a pointer in lists. Names are bold, labels are
 //! dimmed, and results line up behind a right-aligned verb, the way cargo
 //! prints. Every function takes the terminal width and returns finished
 //! lines, so the layout can be tested without a terminal.
@@ -12,10 +13,14 @@ use texshelf_core::manifest::Engine;
 use crate::style;
 
 const VERB: usize = 10;
+const OFFICIAL: &str = "●";
 
 /// Columns to lay out for: the terminal's width, or 100 when piped.
 pub fn width() -> usize {
-    let term = Term::stdout();
+    columns(&Term::stdout())
+}
+
+fn columns(term: &Term) -> usize {
     let columns = if term.is_term() {
         usize::from(term.size().1)
     } else {
@@ -105,13 +110,13 @@ pub fn note(text: &str) {
 }
 
 pub fn warning(text: &str) {
-    let lines = message("warning:", text, width());
+    let lines = message("warning:", text, columns(&Term::stderr()));
     let label = console::style("warning:").yellow().bold().for_stderr();
     eprintln!("{label} {}", lines.join("\n"));
 }
 
 pub fn error(text: &str) {
-    let lines = message("error:", text, width());
+    let lines = message("error:", text, columns(&Term::stderr()));
     let label = console::style("error:").red().bold().for_stderr();
     eprintln!("{label} {}", lines.join("\n"));
 }
@@ -147,21 +152,30 @@ pub fn search(rows: &[Row], more: usize, bin: &str, w: usize) -> Vec<String> {
         }),
         (
             "STARS",
-            longest(&|r| r.stars.to_string().len(), "STARS"),
-            &|r| r.stars.to_string(),
+            longest(&|r| stars(r.stars).chars().count(), "STARS"),
+            &|r| stars(r.stars),
         ),
         ("LICENSE", longest(&|r| r.license.len(), "LICENSE"), &|r| {
             r.license.clone()
         }),
     ];
+    // The last two columns of every row are kept for the official dot, so
+    // the dots line up whether or not a row has one.
     let mut kept = optional.len();
     let room = |kept: usize| {
         let used: usize = optional[..kept].iter().map(|c| c.1).sum();
-        w.saturating_sub(name_w + engine_w + used)
+        w.saturating_sub(name_w + engine_w + used + 2)
     };
     while kept > 0 && room(kept) < 34 {
         kept -= 1;
     }
+    let mark = |row: &Row| {
+        if row.official {
+            format!(" {}", style::good(OFFICIAL))
+        } else {
+            String::new()
+        }
+    };
     let mut lines = Vec::new();
 
     if room(kept) >= 34 {
@@ -172,29 +186,32 @@ pub fn search(rows: &[Row], more: usize, bin: &str, w: usize) -> Vec<String> {
         head.push_str("DESCRIPTION");
         lines.push(style::faint(head).to_string());
         for row in rows {
-            let mark = if row.official { "  official" } else { "" };
             let mut middle = String::new();
             for column in &optional[..kept] {
                 middle.push_str(&pad(&column.2(row), column.1));
             }
+            let description = fit(&row.description, room(kept));
             lines.push(format!(
                 "{}{}{middle}{}{}",
                 style::strong(pad(&fit(&row.name, name_w - 2), name_w)),
                 style::engine(row.engine, pad(&row.compiler, engine_w)),
-                fit(&row.description, room(kept) - mark.len()),
-                style::good(mark)
+                if row.official {
+                    pad(&description, room(kept))
+                } else {
+                    description
+                },
+                mark(row)
             ));
         }
     } else {
+        let compiler_w = rows.iter().map(|r| r.compiler.len()).max().unwrap_or(0);
         for row in rows {
-            let mark = if row.official { "official  " } else { "" };
-            let right = mark.len() + row.compiler.len();
-            let name = fit(&row.name, w.saturating_sub(right + 1));
+            let name = fit(&row.name, w.saturating_sub(compiler_w + 3));
             lines.push(format!(
                 "{}{}{}",
-                style::strong(pad(&name, w - right)),
-                style::good(mark),
-                style::engine(row.engine, &row.compiler)
+                style::strong(pad(&name, w - compiler_w - 2)),
+                style::engine(row.engine, format!("{:>compiler_w$}", row.compiler)),
+                mark(row)
             ));
             lines.push(style::faint(fit(&row.description, w)).to_string());
         }
@@ -202,19 +219,30 @@ pub fn search(rows: &[Row], more: usize, bin: &str, w: usize) -> Vec<String> {
 
     lines.push(String::new());
     let count = format!(
-        "{} template{}.",
+        "{} template{}",
         rows.len(),
         if rows.len() == 1 { "" } else { "s" }
     );
+    // Styled in pieces: a reset after the green dot would end the dim text.
+    let count = if rows.iter().any(|r| r.official) {
+        format!(
+            "{}{}{}",
+            style::faint(format!("{count}, ")),
+            style::good(OFFICIAL),
+            style::faint(" official.")
+        )
+    } else {
+        style::faint(format!("{count}.")).to_string()
+    };
     let details = format!("{bin} info <name>");
-    if count.len() + 10 + details.len() <= w {
+    if measure_text_width(&count) + 10 + details.len() <= w {
         lines.push(format!(
-            "{} {}",
-            style::faint(format!("{count} Details:")),
+            "{count} {} {}",
+            style::faint("Details:"),
             style::command(details)
         ));
     } else {
-        lines.push(style::faint(count).to_string());
+        lines.push(count);
         lines.push(style::command(fit(&details, w)).to_string());
     }
     if more > 0 {
@@ -230,6 +258,7 @@ pub enum Tone {
     Bad,
 }
 
+#[derive(Clone)]
 pub struct Card {
     pub name: String,
     pub version: String,
@@ -250,12 +279,14 @@ fn toned(text: String, tone: Tone) -> String {
 }
 
 pub fn info(card: &Card, w: usize) -> Vec<String> {
+    let badge = if card.official { 11 } else { 0 };
+    let name_w = w.saturating_sub(card.version.len() + 1 + badge);
     let mut lines = vec![format!(
         "{} {}{}",
-        style::strong(&card.name),
+        style::strong(fit(&card.name, name_w)),
         card.version,
         if card.official {
-            format!(" {}", style::good("official"))
+            format!(" {} official", style::good(OFFICIAL))
         } else {
             String::new()
         }
@@ -269,6 +300,9 @@ pub fn info(card: &Card, w: usize) -> Vec<String> {
                 style::faint(pad(label, 12)),
                 toned(value.clone(), *tone)
             ));
+        } else if is_link(value) {
+            lines.push(style::faint(label).to_string());
+            lines.push(format!("  {}", toned(value.clone(), *tone)));
         } else {
             lines.push(style::faint(label).to_string());
             for line in wrap(value, w - 2) {
@@ -280,15 +314,20 @@ pub fn info(card: &Card, w: usize) -> Vec<String> {
         lines.push(String::new());
         lines.push(style::faint("Variables").to_string());
         for (key, about) in &card.variables {
-            lines.push(format!(
-                "  {}{}",
-                style::strong(pad(key, 10)),
-                fit(about, w.saturating_sub(12))
-            ));
+            if key.len() <= 8 {
+                lines.push(format!(
+                    "  {}{}",
+                    style::strong(pad(key, 10)),
+                    fit(about, w.saturating_sub(12))
+                ));
+            } else {
+                lines.push(format!("  {}", style::strong(fit(key, w - 2))));
+                lines.push(format!("    {}", fit(about, w - 4)));
+            }
         }
     }
     lines.push(String::new());
-    lines.push(style::command(&card.init).to_string());
+    lines.push(style::command(fit(&card.init, w)).to_string());
     if let Some(link) = &card.link {
         lines.push(style::faint(link).to_string());
     }
@@ -296,21 +335,55 @@ pub fn info(card: &Card, w: usize) -> Vec<String> {
 }
 
 /// Printed once the archive is downloaded and its checksum matches.
-pub fn fetched(name: &str, version: &str, _engine: Engine, _w: usize) -> Vec<String> {
+pub fn fetched(name: &str, version: &str, _engine: Engine, w: usize) -> Vec<String> {
+    let name = fit(name, w.saturating_sub(VERB + 2 + version.len()));
     vec![
         done("Fetched", &format!("{name} {version}")),
-        done("Verified", "sha256 matches the index"),
+        done("Verified", &fit("sha256 matches the index", w - VERB - 1)),
     ]
 }
 
 pub fn created(dir: &str, details: &str, next: &str, w: usize) -> Vec<String> {
-    vec![
-        done(
+    let room = w - VERB - 1;
+    let place = format!("{dir}/");
+    let created = if measure_text_width(&place) + 3 + details.len() <= room {
+        vec![done(
             "Created",
-            &format!("{} ({details})", style::strong(format!("{dir}/"))),
-        ),
-        done("Next", &style::command(fit(next, w - VERB - 1)).to_string()),
-    ]
+            &format!("{} ({details})", style::strong(place)),
+        )]
+    } else {
+        vec![
+            done("Created", &style::strong(fit(&place, room)).to_string()),
+            format!("{}{}", " ".repeat(VERB + 1), fit(details, room)),
+        ]
+    };
+    // The next step is a command to copy, so it becomes one command per
+    // line before anything is cut.
+    let mut lines = created;
+    let parts: Vec<&str> = if measure_text_width(next) <= room {
+        vec![next]
+    } else {
+        next.split(" && ").collect()
+    };
+    for (i, line) in parts.into_iter().enumerate() {
+        let line = style::command(fit(line, room)).to_string();
+        if i == 0 {
+            lines.push(done("Next", &line));
+        } else {
+            lines.push(format!("{}{line}", " ".repeat(VERB + 1)));
+        }
+    }
+    lines
+}
+
+pub fn stars(count: u64) -> String {
+    format!("★ {count}")
+}
+
+/// Links are never cut short: a cut link is useless, and a terminal wraps a
+/// long one so that it still opens.
+fn is_link(text: &str) -> bool {
+    text.starts_with("https://") || text.starts_with("http://")
 }
 
 pub struct Tool {
@@ -386,7 +459,11 @@ pub fn taps(taps: &[(String, String)], w: usize) -> Vec<String> {
             format!(
                 "{}{}",
                 style::strong(pad(name, name_w)),
-                fit(url, w - name_w)
+                if is_link(url) {
+                    url.clone()
+                } else {
+                    fit(url, w - name_w)
+                }
             )
         })
         .collect()
@@ -524,6 +601,17 @@ mod tests {
             init: "texshelf init aastex".into(),
             link: None,
         };
+        let long = Card {
+            name: "uc/a-template-with-a-very-long-name".into(),
+            version: "2026.10.28".into(),
+            official: true,
+            variables: vec![(
+                "supervisor_department".into(),
+                "Department of the supervisor (default: Astronomy)".into(),
+            )],
+            init: "texshelf init uc/a-template-with-a-very-long-name".into(),
+            ..card.clone()
+        };
         let list = [Option_ {
             id: "tinytex",
             about: "A small TeX Live in your home folder, no admin rights. Add packages later with tlmgr.",
@@ -539,6 +627,19 @@ mod tests {
                 "cd my-paper && latexmk -pdf main.tex",
                 w,
             ));
+            all.extend(created(
+                "papers/2026/a-paper-with-a-long-folder-name",
+                "14 files, LPPL-1.3c, git repository",
+                "cd papers/2026/a-paper-with-a-long-folder-name && latexmk -pdf main.tex",
+                w,
+            ));
+            all.extend(fetched(
+                "uc/a-template-with-a-long-name",
+                "2026.10.28",
+                Engine::Latex,
+                w,
+            ));
+            all.extend(info(&long, w));
             all.extend(options(&list, w - 4));
             all.extend(packages(
                 "main.tex",
@@ -554,7 +655,7 @@ mod tests {
                 )],
                 w,
             ));
-            for line in all {
+            for line in all.into_iter().filter(|l| !l.contains("://")) {
                 assert!(measure_text_width(&line) <= w, "{w}: {line}");
             }
         }
@@ -563,11 +664,22 @@ mod tests {
     #[test]
     fn narrow_windows_get_two_lines_per_template() {
         let wide = search(&rows(), 0, "texshelf", 110);
-        assert!(wide[0].contains("LICENSE") && wide[1].contains("official"));
+        assert!(wide[0].contains("LICENSE") && wide[1].ends_with('●'));
+        assert!(wide[1].contains("★ 12"));
         let medium = search(&rows(), 0, "texshelf", 80);
         assert!(medium[0].contains("DESCRIPTION") && !medium[0].contains("LICENSE"));
         let narrow = search(&rows(), 0, "texshelf", 44);
         assert!(!narrow[0].contains("NAME") && narrow[1].starts_with("Short article"));
+    }
+
+    #[test]
+    fn compilers_and_dots_line_up_in_narrow_windows() {
+        let mut rows = rows();
+        rows[1].compiler = "typst".into();
+        rows[1].official = false;
+        let lines = search(&rows, 0, "texshelf", 44);
+        assert!(lines[0].ends_with("pdflatex ●") && measure_text_width(&lines[0]) == 44);
+        assert!(lines[2].ends_with("   typst") && measure_text_width(&lines[2]) == 42);
     }
 
     #[test]

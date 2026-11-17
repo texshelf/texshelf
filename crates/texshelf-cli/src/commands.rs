@@ -318,7 +318,7 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
     if let Some(repo) = &entry.repository {
         field("Source", repo.clone());
     }
-    field("Stars", stat.stars.to_string());
+    field("Stars", ui::stars(stat.stars));
     field("Published", version.published.clone());
     field(
         "Versions",
@@ -382,7 +382,7 @@ pub fn info(bin: &str, spec: &str, json: bool) -> Result<()> {
 pub(crate) fn launch(target: &str) {
     println!("{target}");
     if let Err(err) = open::that(target) {
-        eprintln!("could not open it automatically: {err}");
+        style::warning(format!("could not open it automatically ({err})"));
     }
 }
 
